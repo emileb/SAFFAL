@@ -5,63 +5,61 @@ import android.util.Log;
 import java.io.IOException;
 import java.util.ArrayList;
 
-public class FileJNI
-{
+public class FileJNI {
     final static String TAG = "FileJNI JAVA";
 
-    public static ArrayList<FileSAF> openFiles = new ArrayList<>();
+    // Init the C library, pass in the root path so the path check can be done in C code
+    public static native int init(String SAFPath);
 
-    public static int fopen(final String filePath, final String mode)
-    {
-        Log.d(TAG,"fopen file = " + filePath);
+    public static int fopen(final String filePath, final String mode) {
+        Log.d(TAG, "fopen file = " + filePath);
 
         FileSAF fileSAF = new FileSAF(filePath);
 
         // If not in the SAF area return -1 so the NDK code knows this
-        if( !UtilsSAF.isInSAFRoot( fileSAF.getPath() ))
-        {
+        if (!UtilsSAF.isInSAFRoot(fileSAF.getPath())) {
             return -1;
         }
 
-        openFiles.add(fileSAF);
+        int fd = fileSAF.getFd(mode.contains("w"), true);
 
-        int fd = fileSAF.getFd(mode.contains("w"));
-
-        Log.d(TAG,"fd = " + fd);
+        Log.d(TAG, "fd = " + fd);
 
         return fd;
     }
 
-    public static int fclose(int fd)
-    {
-        // Search for FD
-        int found = -1;
-        for( int n = 0; n < openFiles.size(); n++)
-        {
-            if( openFiles.get(n).fd == fd )
-            {
-                found = n;
-                break;
-            }
+
+    public static int mkdir(String path) {
+        Log.d(TAG, "mkdir path = " + path);
+
+        FileSAF fileSAF = new FileSAF(path);
+
+        // If not in the SAF area return -1 so the NDK code knows this
+        if (!UtilsSAF.isInSAFRoot(fileSAF.getPath())) {
+            return -1;
         }
 
-        if( found != -1 )
+        if (fileSAF.mkdir() == true) // Success
         {
-            Log.d(TAG,"fclose closing file " + fd);
-            try
-            {
-                openFiles.get(found).parcelFileDescriptor.close();
-            } catch (IOException e)
-            {
-                e.printStackTrace();
-            }
-            openFiles.remove(found);
+            return 0;
+        } else // Failed
+        {
+            return 1;
+        }
+    }
+
+    public static int exists(String path) {
+
+        Log.d(TAG, "exists path = " + path);
+
+        FileSAF fileSAF = new FileSAF(path);
+
+        if (fileSAF.exists()) {
+            return 1;
         }
         else
         {
-            Log.e(TAG,"ERROR, did not find FD in list, this should not happen!");
+            return 0;
         }
-
-        return 0;
     }
 }

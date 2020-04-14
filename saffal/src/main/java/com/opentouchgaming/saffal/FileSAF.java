@@ -1,20 +1,17 @@
 package com.opentouchgaming.saffal;
 
-import android.net.Uri;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
-import android.provider.DocumentsContract;
 import android.support.annotation.RequiresApi;
 import android.support.v4.provider.DocumentFile;
 import android.util.Log;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 
-public class FileSAF
-{
+public class FileSAF {
     final String TAG = "FileSAF";
 
     // Full path
@@ -24,7 +21,9 @@ public class FileSAF
     boolean isDirectory;
 
     // Real document;
-    DocumentFile docFile;
+    //DocumentFile docFile;
+
+    DocumentNode documentNode;
 
     // Keep this for NDK. I think the file gets closed if this is GC'ed
     ParcelFileDescriptor parcelFileDescriptor;
@@ -32,88 +31,82 @@ public class FileSAF
     // FD if getFd called
     int fd;
 
-    public FileSAF(String path)
-    {
-        try
-        {
+    public FileSAF(String path) {
+        try {
             this.path = new File(path).getCanonicalPath();
-        } catch (IOException e)
-        {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public String getPath()
-    {
+    public String getPath() {
         return path;
     }
 
-    public boolean isDirectory()
-    {
-        updateDocument(true);
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public boolean isDirectory() {
+        updateDocumentNode(true);
         return isDirectory;
     }
 
-    public boolean exists()
-    {
-        updateDocument(true);
-        if (docFile != null)
-        {
-            return docFile.exists();
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public boolean exists() {
+        updateDocumentNode(true);
+        if (documentNode != null) {
+            return true;
         }
         return false;
     }
 
-    public boolean delete()
-    {
-        updateDocument(true);
-        if (docFile != null)
-        {
+    public boolean delete() {
+        /*
+        updateDocumentNode(true);
+        if (docFile != null) {
             return docFile.delete();
         }
+         */
         return false;
     }
 
-    public int getFd(boolean write)
-    {
-        updateDocument(true);
-        if (docFile != null)
-        {
-            DBG("URI = " + docFile.getUri().toString());
-            try
-            {
-                parcelFileDescriptor = UtilsSAF.getParcelDescriptor(docFile,write);
-                fd = parcelFileDescriptor.getFd();
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public int getFd(boolean write, boolean detach) {
+
+        updateDocumentNode(true);
+
+        if (documentNode != null) {
+            try {
+                parcelFileDescriptor = UtilsSAF.getParcelDescriptor(documentNode.documentId, write);
+                if (detach)
+                    fd = parcelFileDescriptor.detachFd();
+                else
+                    fd = parcelFileDescriptor.getFd();
                 return fd;
-            } catch (IOException e)
-            {
+            } catch (IOException e) {
                 e.printStackTrace();
             }
         }
         return 0; // Failed
     }
 
-    InputStream getInputStream(DocumentFile docFile)
-    {
-        updateDocument(true);
-        if (docFile != null)
-        {
-            try
-            {
+    InputStream getInputStream(DocumentFile docFile) {
+        /*
+        updateDocumentNode(true);
+        if (docFile != null) {
+            try {
                 return UtilsSAF.getInputStream(docFile);
-            } catch (FileNotFoundException e)
-            {
+            } catch (FileNotFoundException e) {
                 e.printStackTrace();
             }
         }
+         */
         return null;
     }
 
     // mkdir is only successful if the parent dir already exists.
     // NOTE it is important not to tell SAF to create a new folder/dir with the same name as as existing file
     // because it will auto rename and make another file (1), (2)..etc
-    public boolean mkdir()
-    {
+    public boolean mkdir() {
+        /*
         DBG("mkdir: path = " + path);
 
         DocumentFile newDoc = UtilsSAF.createPath(path);
@@ -123,10 +116,12 @@ public class FileSAF
         DBG("mkdir: successful = " + successful);
 
         return (successful);
+         */
+        return false;
     }
 
-    public boolean mkdirs()
-    {
+    public boolean mkdirs() {
+        /*
         DBG("mkdirs: path = " + path);
 
         DocumentFile newDoc = UtilsSAF.createPaths(path);
@@ -136,89 +131,84 @@ public class FileSAF
         DBG("mkdirs: successful = " + successful);
 
         return (successful);
+         */
+        return false;
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public boolean renameTo(String newName)
-    {
-        updateDocument(false);
+    public boolean renameTo(String newName) {
+        /*
+        updateDocumentNode(false);
 
-        if (docFile != null)
-        {
+        if (docFile != null) {
             Uri uri = null;
-            try
-            {
+            try {
                 uri = DocumentsContract.renameDocument(UtilsSAF.getContentResolver(), docFile.getUri(), newName);
-            } catch (FileNotFoundException e)
-            {
+            } catch (FileNotFoundException e) {
                 e.printStackTrace();
             }
             return (uri != null);
-        } else
-        {
+        } else {
             return false;
         }
+         */
+        return false;
     }
 
-    public boolean createNewFile()
-    {
+    public boolean createNewFile() {
+        /*
         DocumentFile file = UtilsSAF.createFile(path);
-        if (file != null)
-        {
-            updateDocument(true);
+        if (file != null) {
+            updateDocumentNode(true);
             return true;
-        } else
-        {
+        } else {
             return false;
         }
+         */
+        return false;
     }
 
 
-    public FileSAF[] listFiles()
-    {
-        FileSAF[] ret = null;
 
-        updateDocument(true);
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public FileSAF[] listFiles() {
 
-        if (docFile != null)
-        {
-            if (docFile.isDirectory())
-            {
-                // TODO: This is very slow, apparently can be sped up with 'DocumentsContract'
-                // EDIT, cant get  'DocumentsContract' to work on anything but the root?!
-                DocumentFile[] docFiles = docFile.listFiles();
-                if (docFiles != null)
+        DBG("listFiles: path = " + getPath());
+
+        updateDocumentNode(true);
+
+        ArrayList<FileSAF> files = new ArrayList<>();
+
+        if (documentNode != null) {
+            if (documentNode.isDirectory) {
                 {
-                    ret = new FileSAF[docFiles.length];
+                    ArrayList<DocumentNode> nodes = documentNode.getChildren();
 
-                    for (int n = 0; n < docFiles.length; n++)
+                    // For each valid document, create a new FileSAF and return
+                    for(DocumentNode node : nodes)
                     {
-                        DocumentFile doc = docFiles[n];
-                        Log.d(TAG, "found: " + path + "/" + doc.getName());
-                        // Append the file name to the path of this file
-                        ret[n] = new FileSAF(path + "/" + doc.getName());
+                        files.add(new FileSAF(path + "/" + node.name));
                     }
                 }
-
             }
         }
-        return ret;
+        return files.toArray(new FileSAF[files.size()]);
     }
 
-    private void updateDocument(boolean forceUpdate)
-    {
-        if (docFile == null || forceUpdate)
-        {
-            docFile = UtilsSAF.getDocumentFile(path);
-            if (docFile != null)
-            {
-                isDirectory = docFile.isDirectory();
-            }
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private void updateDocumentNode(boolean forceUpdate) {
+
+        String documentPath = UtilsSAF.getDocumentPath(path);
+
+        DBG("updateDocumentNode: documentPath = " + documentPath);
+        documentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, documentPath);
+
+        if(documentNode != null) {
+            isDirectory = documentNode.isDirectory;
         }
     }
 
-    private void DBG(String str)
-    {
+    private void DBG(String str) {
         Log.d(TAG, str);
     }
 }
