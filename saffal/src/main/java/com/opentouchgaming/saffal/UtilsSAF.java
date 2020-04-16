@@ -12,12 +12,15 @@ import android.provider.DocumentsContract;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.v4.provider.DocumentFile;
+import android.system.Os;
+import android.text.TextUtils;
 import android.util.Log;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 
 public class UtilsSAF {
     static String TAG = "UtilsSAF";
@@ -178,7 +181,78 @@ public class UtilsSAF {
      * @return True if in SAF space
      */
     public static boolean isInSAFRoot(String path) {
-        return path.startsWith(treeRoot.rootPath);
+        if(ready())
+            return path.startsWith(treeRoot.rootPath);
+        else
+            return false;
+    }
+
+    // Found at: https://stackoverflow.com/questions/30546441/android-open-file-with-intent-chooser-from-uri-obtained-by-storage-access-frame
+    public static String getFdPath(int fd) {
+
+        //if(true)
+        //    return "/proc/self/fd/" + fd;
+
+        final String resolved;
+
+        try {
+            final File procfsFdFile = new File("/proc/self/fd/" + fd);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                // Returned name may be empty or "pipe:", "socket:", "(deleted)" etc.
+                resolved = Os.readlink(procfsFdFile.getAbsolutePath());
+            } else {
+                // Returned name is usually valid or empty, but may start from
+                // funny prefix if the file does not have a name
+                resolved = procfsFdFile.getCanonicalPath();
+            }
+
+            if (TextUtils.isEmpty(resolved) || resolved.charAt(0) != '/'
+                    || resolved.startsWith("/proc/") || resolved.startsWith("/fd/"))
+                return null;
+        } catch (IOException ioe) {
+            // This exception means, that given file DID have some name, but it is
+            // too long, some of symlinks in the path were broken or, most
+            // likely, one of it's directories is inaccessible for reading.
+            // Either way, it is almost certainly not a pipe.
+            return "";
+        } catch (Exception errnoe) {
+            // Actually ErrnoException, but base type avoids VerifyError on old versions
+            // This exception should be VERY rare and means, that the descriptor
+            // was made unavailable by some Unix magic.
+            return null;
+        }
+
+        return resolved;
+    }
+
+
+   // public static ArrayList<FileSAF> fileskeep = new ArrayList<>();
+    /**
+     * Returns a REAL File, even for files in SAF! NOTE, the file name and path of the file in SAF may be incorrect
+     *
+     * @return File or null
+     */
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public static File getRealFile(String path)
+    {
+        DBG("getRealFile: " + path);
+        File file = null;
+        if( ready() && isInSAFRoot(path) )
+        {
+            FileSAF fileSAF = new FileSAF(path);
+           // fileskeep.add(fileSAF);
+            if(fileSAF.exists())
+            {
+                file = fileSAF.getRealFile(path);
+            }
+        }
+        else
+        {
+            file = new File(path);
+        }
+
+        return file;
     }
 
     static InputStream getInputStream(DocumentFile docFile) throws FileNotFoundException {

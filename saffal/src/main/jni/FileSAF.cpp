@@ -32,17 +32,42 @@ static void* loadRealFunc( const char * name )
     return func;
 }
 
-int open(const char *path, int oflag, ... )
+
+int open(const char *path, int oflag )
 {
-    LOGI( "open %s", path );
+	// Remove relative paths (../ etc)
+	std::string fullFilename = getCanonicalPath(path);
 
-    static int(*open_real)(const char *path, int oflag, ...) = NULL;
-    if( open_real == NULL )
-        open_real = (int(*)(const char *path, int oflag, ...))loadRealFunc("open");
+	bool inSAF = isInSAF( fullFilename );
 
-    return open_real( path, oflag );
+	if( inSAF )
+	{
+	    LOGI( "open %s", path );
+
+	    // fd = -1, not in SAF area, fd = 0, failed to open. Otherwise valid file
+	    int fd = FileJNI_fopen( fullFilename.c_str(), "r" );
+
+		if( fd > 0 )
+	        return fd;
+        else
+            return -1;
+	}
+	else // Not in SAF, normal access
+	{
+        // Load the real function
+
+	    static int(*open_real)(const char *path, int oflag) = NULL;
+	    if( open_real == NULL )
+	        open_real = (int(*)(const char *path, int oflag))loadRealFunc("open");
+
+	    return open_real( path, oflag );
+	}
 }
 
+int __open_2(const char *path, int oflag )
+{
+	return open(path, oflag);
+}
 //------------------------
 // fopen INTERCEPT
 //------------------------
@@ -61,7 +86,7 @@ FILE * fopen( const char * filename, const char * mode )
 	// Remove relative paths (../ etc)
 	std::string fullFilename = getCanonicalPath(filename);
 
-	bool inSAF = isInSAF( filename );
+	bool inSAF = isInSAF( fullFilename );
 
 	if( inSAF )
 	{
@@ -144,15 +169,26 @@ int stat(const char *path, struct stat *statbuf)
 {
     LOGI( "stat %s", path );
 
-	bool inSAF = isInSAF( path );
+	std::string fullFilename = getCanonicalPath(path);
+
+	bool inSAF = isInSAF( fullFilename );
 
 	if( inSAF )
 	{
-		// TODO! No stat information is actually got from SAF yet
-		if(FileJNI_exists(path))
-			return 0;
-		else
-			return -1;
+		// Try to get an fd
+        int fd = FileJNI_fopen( fullFilename.c_str(), "r" );
+
+	    if( fd > 0 ) // File was in SAF area
+	    {
+	        fstat( fd, statbuf);
+	        LOGI("stat size = %d, mode = %d",statbuf->st_size, statbuf->st_mode);
+	        close( fd );
+	        return 0;
+	    }
+	    else
+	    {
+	        return -1;
+	    }
 	}
 	else
 	{
@@ -164,8 +200,32 @@ int stat(const char *path, struct stat *statbuf)
     }
 
 }
+//------------------------
+// access INTERCEPT
+//------------------------
+int access(const char *pathname, int mode)
+{
+    LOGI( "access %s", pathname );
 
+	bool inSAF = isInSAF( pathname );
 
+	if( inSAF )
+	{
+		// TODO! Check mode for access bits
+		if(FileJNI_exists(pathname))
+			return 0;
+		else
+			return -1;
+	}
+	else
+	{
+		static int(*access_real)(const char *pathname, int mode) = NULL;
+		if( access_real == NULL )
+		access_real = (int(*)(const char *pathname, int mode))loadRealFunc("access");
+
+		return access_real( pathname, mode );
+    }
+}
 
 //------------------------
 // opendir INTERCEPT

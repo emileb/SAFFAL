@@ -16,7 +16,7 @@ public class FileJNI {
 
         FileSAF fileSAF = new FileSAF(filePath);
 
-        // If not in the SAF area return -1 so the NDK code knows this
+        // If not in the SAF area return -1
         if (!UtilsSAF.isInSAFRoot(fileSAF.getPath())) {
             return -1;
         }

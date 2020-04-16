@@ -68,6 +68,7 @@ public class FileSAF {
         return false;
     }
 
+
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public int getFd(boolean write, boolean detach) {
 
@@ -85,7 +86,7 @@ public class FileSAF {
                 e.printStackTrace();
             }
         }
-        return 0; // Failed
+        return -1; // Failed
     }
 
     InputStream getInputStream(DocumentFile docFile) {
@@ -169,6 +170,26 @@ public class FileSAF {
     }
 
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public File getRealFile(String path)
+    {
+        File file = null;
+
+        if(exists())
+        {
+            int fd = getFd(false,true);
+
+            String linkFileName = UtilsSAF.getFdPath(fd);
+
+            if(linkFileName != null  && linkFileName.length() > 0) {
+                file = new File(linkFileName);
+            }
+
+            DBG("getRealFile: Real File = " + linkFileName );
+        }
+
+        return file;
+    }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public FileSAF[] listFiles() {
@@ -197,14 +218,15 @@ public class FileSAF {
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void updateDocumentNode(boolean forceUpdate) {
+        if(documentNode == null || forceUpdate) {
+            String documentPath = UtilsSAF.getDocumentPath(path);
 
-        String documentPath = UtilsSAF.getDocumentPath(path);
+            documentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, documentPath);
 
-        DBG("updateDocumentNode: documentPath = " + documentPath);
-        documentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, documentPath);
-
-        if(documentNode != null) {
-            isDirectory = documentNode.isDirectory;
+            if (documentNode != null) {
+                DBG("FileSAF (" + path + ") found Documet: " + documentNode.documentId);
+                isDirectory = documentNode.isDirectory;
+            }
         }
     }
 

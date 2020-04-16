@@ -98,7 +98,7 @@ bool isInSAF( std::string path )
 {
     bool isInSAF = false;
 
-    if (path.rfind(m_SAFPath, 0) == 0) {
+    if (m_SAFPath.length() > 0 && path.rfind(m_SAFPath, 0) == 0) {
         isInSAF = true;
     }
 

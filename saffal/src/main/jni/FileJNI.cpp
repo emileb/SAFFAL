@@ -74,7 +74,7 @@ int FileJNI_fopen( const char * filename, const char * mode )
     jstring modeStr = (env)->NewStringUTF(mode);
 
     // Call Java function
-    // Returns -1 for not in SAF space. 0 for invalid file in SAF. Else a valid FD
+    // Returns -1 for invalid file in SAF. Else a valid FD
     int ret = (env)->CallStaticIntMethod( fopen_cls, fopen_method, filenameStr, modeStr );
 
     (env)->DeleteLocalRef( filenameStr );
