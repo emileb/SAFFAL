@@ -13,96 +13,113 @@ static std::string m_SAFPath;
 #define IS_SLASH(s) (s == '/')
 static void ap_getparents(char *name)
 {
-    char *next;
-    int l, w, first_dot;
+	char *next;
+	int l, w, first_dot;
 
-    /* Four paseses, as per RFC 1808 */
-    /* a) remove ./ path segments */
-    for (next = name; *next && (*next != '.'); next++) {
-    }
+	/* Four paseses, as per RFC 1808 */
+	/* a) remove ./ path segments */
+	for(next = name; *next && (*next != '.'); next++)
+	{
+	}
 
-    l = w = first_dot = next - name;
-    while (name[l] != '\0') {
-        if (name[l] == '.' && IS_SLASH(name[l + 1])
-            && (l == 0 || IS_SLASH(name[l - 1])))
-            l += 2;
-        else
-            name[w++] = name[l++];
-    }
+	l = w = first_dot = next - name;
 
-    /* b) remove trailing . path, segment */
-    if (w == 1 && name[0] == '.')
-        w--;
-    else if (w > 1 && name[w - 1] == '.' && IS_SLASH(name[w - 2]))
-        w--;
-    name[w] = '\0';
+	while(name[l] != '\0')
+	{
+		if(name[l] == '.' && IS_SLASH(name[l + 1])
+		        && (l == 0 || IS_SLASH(name[l - 1])))
+			l += 2;
+		else
+			name[w++] = name[l++];
+	}
 
-    /* c) remove all xx/../ segments. (including leading ../ and /../) */
-    l = first_dot;
+	/* b) remove trailing . path, segment */
+	if(w == 1 && name[0] == '.')
+		w--;
+	else if(w > 1 && name[w - 1] == '.' && IS_SLASH(name[w - 2]))
+		w--;
 
-    while (name[l] != '\0') {
-        if (name[l] == '.' && name[l + 1] == '.' && IS_SLASH(name[l + 2])
-            && (l == 0 || IS_SLASH(name[l - 1]))) {
-            int m = l + 3, n;
+	name[w] = '\0';
 
-            l = l - 2;
-            if (l >= 0) {
-                while (l >= 0 && !IS_SLASH(name[l]))
-                    l--;
-                l++;
-            }
-            else
-                l = 0;
-            n = l;
-            while ((name[n] = name[m]))
-                (++n, ++m);
-        }
-        else
-            ++l;
-    }
+	/* c) remove all xx/../ segments. (including leading ../ and /../) */
+	l = first_dot;
 
-    /* d) remove trailing xx/.. segment. */
-    if (l == 2 && name[0] == '.' && name[1] == '.')
-        name[0] = '\0';
-    else if (l > 2 && name[l - 1] == '.' && name[l - 2] == '.'
-             && IS_SLASH(name[l - 3])) {
-        l = l - 4;
-        if (l >= 0) {
-            while (l >= 0 && !IS_SLASH(name[l]))
-                l--;
-            l++;
-        }
-        else
-            l = 0;
-        name[l] = '\0';
-    }
+	while(name[l] != '\0')
+	{
+		if(name[l] == '.' && name[l + 1] == '.' && IS_SLASH(name[l + 2])
+		        && (l == 0 || IS_SLASH(name[l - 1])))
+		{
+			int m = l + 3, n;
+
+			l = l - 2;
+
+			if(l >= 0)
+			{
+				while(l >= 0 && !IS_SLASH(name[l]))
+					l--;
+
+				l++;
+			}
+			else
+				l = 0;
+
+			n = l;
+
+			while((name[n] = name[m]))
+				(++n, ++m);
+		}
+		else
+			++l;
+	}
+
+	/* d) remove trailing xx/.. segment. */
+	if(l == 2 && name[0] == '.' && name[1] == '.')
+		name[0] = '\0';
+	else if(l > 2 && name[l - 1] == '.' && name[l - 2] == '.'
+	        && IS_SLASH(name[l - 3]))
+	{
+		l = l - 4;
+
+		if(l >= 0)
+		{
+			while(l >= 0 && !IS_SLASH(name[l]))
+				l--;
+
+			l++;
+		}
+		else
+			l = 0;
+
+		name[l] = '\0';
+	}
 }
 
-void setSAFPath( std::string SAFPath )
+void setSAFPath(std::string SAFPath)
 {
-    m_SAFPath = SAFPath;
+	m_SAFPath = SAFPath;
 }
 
-std::string getCanonicalPath( std::string path )
+std::string getCanonicalPath(std::string path)
 {
-    // The above function works on c array, so copy
-    char pathC[PATH_MAX];
-    strncpy( pathC, path.c_str(),PATH_MAX );
+	// The above function works on c array, so copy
+	char pathC[PATH_MAX];
+	strncpy(pathC, path.c_str(), PATH_MAX);
 
-    ap_getparents( pathC );
+	ap_getparents(pathC);
 
-    return std::string(pathC);
+	return std::string(pathC);
 }
 
-bool isInSAF( std::string path )
+bool isInSAF(std::string path)
 {
-    bool isInSAF = false;
+	bool isInSAF = false;
 
-    if (m_SAFPath.length() > 0 && path.rfind(m_SAFPath, 0) == 0) {
-        isInSAF = true;
-    }
+	if(m_SAFPath.length() > 0 && path.rfind(m_SAFPath, 0) == 0)
+	{
+		isInSAF = true;
+	}
 
-    LOGI("isInSAF: %s -> In SAF = %d", path.c_str(), isInSAF );
+	LOGI("isInSAF: %s -> In SAF = %d", path.c_str(), isInSAF);
 
-    return isInSAF;
+	return isInSAF;
 }
