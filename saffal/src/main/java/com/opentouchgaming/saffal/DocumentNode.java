@@ -7,6 +7,8 @@ import android.provider.DocumentsContract;
 import android.support.annotation.RequiresApi;
 import android.util.Log;
 
+import java.io.FileNotFoundException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -14,10 +16,15 @@ public class DocumentNode {
 
     static String TAG = "DocumentNode";
 
+    static final String mimeType = "plain";
+
+
     public String name;
     public String documentId;
     public boolean exists;
     public boolean isDirectory;
+    public long size;
+    public long modifiedDate;
     public DocumentNode parent;
 
     private List<DocumentNode> children;
@@ -34,6 +41,17 @@ public class DocumentNode {
                 if (n.name.contentEquals(name)) {
                     node = n;
                     break;
+                }
+            }
+
+            // If didn't find the exact name, do a case insensitive search
+            if(node == null && UtilsSAF.CASE_INSENSITIVE)
+            {
+                for (DocumentNode n : children) {
+                    if (n.name.toLowerCase().contentEquals(name.toLowerCase())) {
+                        node = n;
+                        break;
+                    }
                 }
             }
         }
@@ -54,31 +72,33 @@ public class DocumentNode {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public void findChildren() {
+    public synchronized void findChildren() {
         if (isDirectory) {
-            if (children == null) // Check is already been scanned, this is allows caching of the files
+            if (children == null) // Check if already been scanned, this is allows caching of the files
             {
                 children = new ArrayList<>();
 
                 Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
 
-                Cursor cursor = UtilsSAF.context.getContentResolver().query(childrenUri, new String[]{
-                        DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.COLUMN_DOCUMENT_ID}, null, null, null);
+                Cursor cursor = UtilsSAF.getContentResolver().query(childrenUri, new String[]{
+                        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                        DocumentsContract.Document.COLUMN_MIME_TYPE,
+                        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                        DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                        DocumentsContract.Document.COLUMN_SIZE}, null, null, null);
                 try {
                     while (cursor.moveToNext()) {
 
-                        String displayName = cursor.getString(0);
-                        String mimeType = cursor.getString(1);
-                        String documentId = cursor.getString(2);
-
-                        DBG("findChildren: child=" + displayName + ", docId=" + documentId);
-
                         DocumentNode newNode = new DocumentNode();
-                        newNode.name = displayName;
-                        newNode.exists = true;
-                        newNode.isDirectory = DocumentsContract.Document.MIME_TYPE_DIR.equals(mimeType);
-                        newNode.documentId = documentId;
                         newNode.parent = this;
+                        newNode.exists = true;
+                        newNode.name = cursor.getString(0);;
+                        newNode.isDirectory = DocumentsContract.Document.MIME_TYPE_DIR.equals(cursor.getString(1));
+                        newNode.documentId =  cursor.getString(2);
+                        newNode.modifiedDate =  cursor.getLong(3);
+                        newNode.size =  cursor.getLong(4);
+
+                        DBG("Found " + newNode.name + " size = " + newNode.size);
 
                         children.add(newNode);
                     }
@@ -88,16 +108,54 @@ public class DocumentNode {
                     } catch (RuntimeException rethrown) {
                         throw rethrown;
                     } catch (Exception ignored) {
+                        DBG("findChildren: Some Exception: " + ignored.toString());
                     }
                 }
             }
         } else {
-            DBG("DocumentNode: ERROR, tried to findChildren of non direcotry");
+            DBG("DocumentNode: ERROR, tried to findChildren of non directory");
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public DocumentNode createChild(boolean directory, String name) throws FileNotFoundException {
+
+        DBG("DocumentNode: createChild: " + name);
+
+        if(isDirectory) {
+            if (findChild(name) != null) {
+                DBG("DocumentNode: createChild ERROR, file " + name + " already exists, not creating");
+            } else {
+                Uri myUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
+
+                if(directory)
+                    DocumentsContract.createDocument(UtilsSAF.getContentResolver(), myUri, DocumentsContract.Document.MIME_TYPE_DIR, name);
+                else
+                    DocumentsContract.createDocument(UtilsSAF.getContentResolver(), myUri, mimeType, name);
+
+                // We have created a new file, null the children cache so it's updated next time
+                children = null;
+
+                return findChild(name);
+            }
+        }
+        else
+        {
+            DBG("DocumentNode: createChild ERROR, tried to create child in non-directory");
+        }
+        return null;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public InputStream getInputStream() throws FileNotFoundException {
+
+        Uri myUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
+
+        return UtilsSAF.getContentResolver().openInputStream(myUri);
+    }
+
     /**
-     * Traverse a tree to find a particular DocumentNode. Path must look like:  folder1/folder2/file, or folder1/folder2/folder3
+     * Traverse a tree to find a particular DocumentNode (file or directory). Path must look like:  folder1/folder2/file, or folder1/folder2/folder3
      *
      * @return The node if it exists, otherwise null;
      */
@@ -112,9 +170,9 @@ public class DocumentNode {
             String[] parts = documentPath.split("\\/", -1);
 
             node = rootNode;
+
             for (String part : parts) {
                 if(part.length() > 0) { // part will be an empty string if documentPath was an empty string
-                    DBG("findDocumentNode: part = " + part);
 
                     if (node == null)
                         break;
@@ -127,6 +185,56 @@ public class DocumentNode {
         return node;
     }
 
+
+
+    /**
+     * Create all the directories in documentPath up to the end (like mkdirs)
+     *
+     * @return The node if it exists ot has been created, otherwise null;
+     */
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public static DocumentNode createAllNodes(DocumentNode rootNode, String documentPath) throws FileNotFoundException {
+
+        DBG("DocumentNode: createAllNodes: " + documentPath);
+
+        DocumentNode node = null;
+
+        if (documentPath != null) {
+
+            // Split path into parts
+            String[] parts = documentPath.split("\\/", -1);
+
+            node = rootNode;
+
+            for (String part : parts) {
+                if(part.length() > 0) { // part will be an empty string if documentPath was an empty string
+                    DBG("DocumentNode: createAllNodes: Checking part: " + part);
+                    if( node != null && node.isDirectory ) {
+
+                        DocumentNode next = node.findChild(part);
+                        // Check if directory already exists
+                        if(next == null)
+                        {
+                            // Try to create the next level of folder
+                            node = node.createChild(true,part);
+                        }
+                        else
+                        {
+                            node = next;
+                        }
+                    }
+                    else
+                    {
+                        DBG("DocumentNode: createAllNodes: Error, DocumentNode is not a directory " + node.documentId);
+                        node = null;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return node;
+    }
     private static void DBG(String str) {
         Log.d(TAG, str);
     }

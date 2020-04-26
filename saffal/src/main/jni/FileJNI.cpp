@@ -12,7 +12,6 @@ extern "C"
 
 	static JavaVM* m_jvm;
 
-
 	static JNIEnv *getEnv()
 	{
 		if(!m_jvm)

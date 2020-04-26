@@ -15,24 +15,31 @@
 #include <android/log.h>
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileSAF NDK", __VA_ARGS__))
 
+// Use to disable interception
+#if 0
 
 extern "C"
 {
 
-
+// Get the real OS function
 	static void* loadRealFunc(const char * name)
 	{
-		void * func = dlsym(RTLD_NEXT, name);
+		void * func = dlsym(RTLD_DEFAULT, name);
 
 		if(func == NULL)
 		{
-			LOGI("ERROR, func %s not loaded, this is bad, seg fault ahead..", name);
+			LOGI("ERROR, func %s not loaded, this is bad, really bad, seg fault ahead..", name);
 		}
 
 		return func;
 	}
 
 
+//------------------------
+// open INTERCEPT
+// The only reason this is here is because one engine I use uses 'open' to test the presence of a file
+// There could be weird bugs with this..
+//------------------------
 	int open(const char *path, int oflag)
 	{
 		// Remove relative paths (../ etc)
@@ -59,16 +66,18 @@ extern "C"
 			static int(*open_real)(const char *path, int oflag) = NULL;
 
 			if(open_real == NULL)
-				open_real = (int(*)(const char *path, int oflag))loadRealFunc("open");
+				open_real = (int(*)(const char *path, int oflag))loadRealFunc("__open_2");
 
 			return open_real(path, oflag);
 		}
 	}
 
+	// Android fcntl.h calls this function instead
 	int __open_2(const char *path, int oflag)
 	{
 		return open(path, oflag);
 	}
+
 //------------------------
 // fopen INTERCEPT
 //------------------------
@@ -77,22 +86,26 @@ extern "C"
 	*/
 	FILE * fopen(const char * filename, const char * mode)
 	{
-		LOGI("fopen %s %s", filename, mode);
-
 		if(filename == NULL || mode == NULL)
+		{
+			LOGI("fopen: filename or mode is null");
 			return NULL;
+		}
 
 		FILE *file = NULL;
 
 		// Remove relative paths (../ etc)
 		std::string fullFilename = getCanonicalPath(filename);
 
+		// Check if in SAF
 		bool inSAF = isInSAF(fullFilename);
 
 		if(inSAF)
 		{
-			// fd = -1, not in SAF area, fd = 0, failed to open. Otherwise valid file
+			// fd = -1 failed to open. Otherwise valid file
 			int fd = FileJNI_fopen(fullFilename.c_str(), mode);
+
+			LOGI("fopen: file = %s, mode = %s, fd = %d", fullFilename.c_str(), mode, fd);
 
 			if(fd > 0)   // File was in SAF area
 			{
@@ -133,13 +146,12 @@ extern "C"
 		return fclose_real(file);
 	}
 
-
+/*  TODO
 //------------------------
 // mkdir INTERCEPT
 //------------------------
 	int mkdir(const char *path, mode_t mode)
 	{
-
 		// Remove relative paths (../ etc)
 		std::string fullPath = getCanonicalPath(path);
 
@@ -166,13 +178,14 @@ extern "C"
 			return mkdir_real(path, mode);
 		}
 	}
+*/
 
 //------------------------
 // opendir INTERCEPT
 //------------------------
 	int stat(const char *path, struct stat *statbuf)
 	{
-		LOGI("stat %s", path);
+		// LOGI("stat %s", path);
 
 		std::string fullFilename = getCanonicalPath(path);
 
@@ -241,12 +254,38 @@ extern "C"
 	{
 		LOGI("opendir %s", name);
 
-		static DIR *(*opendir_real)(const char *name) = NULL;
+		std::string fullFilename = getCanonicalPath(name);
 
-		if(opendir_real == NULL)
-			opendir_real = (DIR * (*)(const char *name))loadRealFunc("opendir");
+		bool inSAF = isInSAF(fullFilename);
 
-		return opendir_real(name);
+		if(inSAF)
+		{
+			// Try to get an fd
+            int fd = FileJNI_fopen(fullFilename.c_str(), "r");
+
+            if(fd > 0)   // File was in SAF area
+            {
+                // YES, surprisingly fdopendir actually works with the fd from SAF.
+                // This means I don't need to reimplement it
+                DIR* ret = fdopendir(fd);
+                return ret;
+            }
+            else
+            {
+                return NULL;
+            }
+		}
+		else
+		{
+			static DIR *(*opendir_real)(const char *name) = NULL;
+
+			if(opendir_real == NULL)
+				opendir_real = (DIR * (*)(const char *name))loadRealFunc("opendir");
+
+			return opendir_real(name);
+		}
 	}
 
 }
+
+#endif

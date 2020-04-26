@@ -20,18 +20,16 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
 
 public class UtilsSAF {
     static String TAG = "UtilsSAF";
 
     static Context context;
 
-    static final String mimeType = "plain";
+    static boolean CASE_INSENSITIVE = true;
 
-    //public static final String SAF_ROOT_TAG = "/SAF_ROOT";
     /*
-        TODO: Only one tree root possible at the moment, this should be extented to a list so we can have
+        TODO: Only one tree root possible at the moment, this should be extended to a list so we can have
         multiple roots E.G internal phone flash, and SD Card
     */
     static TreeRoot treeRoot;
@@ -134,6 +132,9 @@ public class UtilsSAF {
             prefsEdit.putString("rootPath", treeRoot.rootPath);
             prefsEdit.putString("rootDocumentId", treeRoot.rootDocumentId);
             prefsEdit.commit();
+        }
+        else {
+            DBG("saveTreeRoot: ERROR, treeRoot not complete");
         }
     }
 
@@ -269,139 +270,6 @@ public class UtilsSAF {
         return filePfd;
     }
 
-    static DocumentFile createFile(@NonNull final String filePath) {
-        // First check if it already exists
-        DocumentFile checkDoc = UtilsSAF.getDocumentFile(filePath);
-        if (checkDoc != null)
-            return checkDoc;
-
-        // Just used to parse path
-        File file = new File(filePath);
-        String parent = file.getParent();
-        String newFile = file.getName();
-
-        DBG("createFile: parent = " + parent + ", newDir = " + newFile);
-
-        DocumentFile parentDoc = UtilsSAF.getDocumentFile(parent);
-        DocumentFile newDirDoc = null;
-
-        if (parentDoc != null) {
-            newDirDoc = parentDoc.createFile(mimeType, newFile);
-        } else {
-            DBG("createFile: could not find parent path");
-        }
-        return newDirDoc;
-    }
-
-    static DocumentFile createPath(@NonNull final String filePath) {
-        // First check if it already exists
-        DocumentFile checkDoc = UtilsSAF.getDocumentFile(filePath);
-        if (checkDoc != null)
-            return checkDoc;
-
-        // Just used to parse path
-        File file = new File(filePath);
-        String parent = file.getParent();
-        String newDir = file.getName();
-
-        DBG("createPath: parent = " + parent + ", newDir = " + newDir);
-
-        DocumentFile parentDoc = UtilsSAF.getDocumentFile(parent);
-        DocumentFile newDirDoc = null;
-
-        if (parentDoc != null) {
-            newDirDoc = parentDoc.createDirectory(newDir);
-        } else {
-            DBG("createPath: could not find parent path");
-        }
-        return newDirDoc;
-    }
-
-    static DocumentFile createPaths(@NonNull final String filePath) {
-        DocumentFile document = DocumentFile.fromTreeUri(context, treeRoot.uri);
-
-        String[] parts = getParts(filePath);
-
-        for (int i = 0; i < parts.length; i++) {
-            DocumentFile nextDocument = document.findFile(parts[i]);
-            if (nextDocument == null) // Not found, try to create new folder
-            {
-                nextDocument = document.createDirectory(parts[i]);
-                if (nextDocument == null) // Did not create for some reason..
-                {
-                    return null;
-                }
-            } else // Dir OR file exists, check it is a directory, otherwise error
-            {
-                if (!nextDocument.isDirectory()) {
-                    return null;
-                }
-            }
-            document = nextDocument;
-        }
-
-        return document;
-    }
-
-    static DocumentFile getDocumentFile(@NonNull final String filePath) {
-        /* THIS SEEMS TO WORK BUT NEED TO FIND OUT IF USABLE ACROSS DEVICES
-        // content://com.android.externalstorage.documents/tree/primary%3A/document/primary%3AOpenTouch%2FDelta%2Fhexdd.wad
-        String relativePath = filePath.substring(treeRoot.rootPath.length() + 1);
-        relativePath = "content://com.android.externalstorage.documents/tree/primary%3A/document/primary%3A" + relativePath.replace("/", "%2F");
-        DBG("uri = " + relativePath);
-        Uri uri = Uri.parse(relativePath);
-
-        DocumentFile ret = DocumentFile.fromSingleUri(context, uri);
-
-        if (ret.exists())
-        {
-            return ret;
-        } else
-        {
-            return null;
-        }
-        */
-        if (false) {
-            DBG("getDocumentFile: filePath = " + filePath);
-            String relativePath = filePath.substring(treeRoot.rootPath.length());
-            String docId = treeRoot.rootDocumentId + relativePath;
-            DBG("getDocumentFile: filePath = " + filePath + " docId = " + docId);
-            Uri uri = DocumentsContract.buildDocumentUriUsingTree(treeRoot.uri, docId);
-            DBG("url = " + uri.toString());
-            DocumentFile document = DocumentFile.fromSingleUri(context, uri);
-
-            if (document.exists() == false)
-                return null;
-            else
-                return document;
-        } else {
-
-            // start with root of SD card and then parse through document tree.
-            DocumentFile document = DocumentFile.fromTreeUri(context, treeRoot.uri);
-
-            String[] parts = getParts(filePath);
-
-            if (parts == null)
-                return null;
-
-            for (int i = 0; i < parts.length; i++) {
-                DBG("getDocumentFile: part[" + i + "] = " + parts[i]);
-
-                if (!document.isDirectory())
-                    return null;
-
-                DocumentFile nextDocument = document.findFile(parts[i]);
-
-                if (nextDocument == null) {
-                    return null;
-                }
-
-                document = nextDocument;
-            }
-
-            return document;
-        }
-    }
 
     public static String getDocumentPath(String fullPath) {
         if (!fullPath.startsWith(treeRoot.rootPath)) {
@@ -424,17 +292,6 @@ public class UtilsSAF {
             return new String[0];
         else
             return childPath.split("\\/", -1);
-
-
-        /*
-        if (fullPath.length() > treeRoot.rootPath.length()) {
-            String relativePath = fullPath.substring(treeRoot.rootPath.length() + 1);
-            parts = relativePath.split("\\/", -1);
-        } else // When at the root return an array of 0, 'split' will return and array of 1 with and empty string
-        {
-            parts = new String[0];
-        }
-         */
 
     }
 

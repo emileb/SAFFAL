@@ -12,7 +12,7 @@ public class FileJNI {
     public static native int init(String SAFPath);
 
     public static int fopen(final String filePath, final String mode) {
-        Log.d(TAG, "fopen file = " + filePath);
+        // Log.d(TAG, "fopen file = " + filePath);
 
         FileSAF fileSAF = new FileSAF(filePath);
 
@@ -22,8 +22,7 @@ public class FileJNI {
         }
 
         int fd = fileSAF.getFd(mode.contains("w"), true);
-
-        Log.d(TAG, "fd = " + fd);
+        //Log.d(TAG, "fd = " + fd);
 
         return fd;
     }
