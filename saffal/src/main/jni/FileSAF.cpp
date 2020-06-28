@@ -16,7 +16,7 @@
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileSAF NDK", __VA_ARGS__))
 
 // Use to disable interception
-#if 0
+#if 1
 
 extern "C"
 {
@@ -24,7 +24,30 @@ extern "C"
 // Get the real OS function
 	static void* loadRealFunc(const char * name)
 	{
-		void * func = dlsym(RTLD_DEFAULT, name);
+		static void * libc = NULL;
+		if( libc == NULL )
+		{
+			libc = dlopen("libc.so", 0);
+			if(!libc)
+			{
+				LOGI("ERROR LIBC NOT LOADED");
+			}
+			LOGI("fopen = %p", dlsym(libc, "fopen"));
+			LOGI("__open_2 = %p", dlsym(libc, "__open_2"));
+			LOGI("open = %p", dlsym(libc, "open"));
+            LOGI("fclose = %p", dlsym(libc, "fclose"));
+			LOGI("stat = %p", dlsym(libc, "stat"));
+			LOGI("access = %p", dlsym(libc, "access"));
+			LOGI("opendir = %p", dlsym(libc, "opendir"));
+		}
+
+		void * func;
+
+		if(!libc) // Could not open libc, bad
+			func = dlsym(RTLD_NEXT, name);
+		else
+			func = dlsym(libc, name);
+
 
 		if(func == NULL)
 		{
@@ -96,6 +119,8 @@ extern "C"
 
 		// Remove relative paths (../ etc)
 		std::string fullFilename = getCanonicalPath(filename);
+
+		//LOGI("fopen: file = %s, mode = %s", fullFilename.c_str(), mode);
 
 		// Check if in SAF
 		bool inSAF = isInSAF(fullFilename);
@@ -199,7 +224,7 @@ extern "C"
 			if(fd > 0)   // File was in SAF area
 			{
 				fstat(fd, statbuf);
-				LOGI("stat size = %d, mode = %d", statbuf->st_size, statbuf->st_mode);
+				LOGI("stat size = %ld, mode = %d", statbuf->st_size, statbuf->st_mode);
 				close(fd);
 				return 0;
 			}

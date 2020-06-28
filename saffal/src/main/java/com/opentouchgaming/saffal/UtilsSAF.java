@@ -234,7 +234,7 @@ public class UtilsSAF {
      *
      * @return File or null
      */
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    //@RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public static File getRealFile(String path)
     {
         DBG("getRealFile: " + path);
