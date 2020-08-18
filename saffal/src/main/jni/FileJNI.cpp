@@ -4,48 +4,85 @@
 
 #include <android/log.h>
 #include <jni.h>
+#include <pthread.h>
 
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileJNI NDK", __VA_ARGS__))
+
+static pthread_mutex_t lock;
+
+
+#define MUTEX_LOCK  pthread_mutex_lock(&lock);
+#define MUTEX_UNLOCK  if(attached) (m_jvm)->DetachCurrentThread(); pthread_mutex_unlock(&lock);
+
+#define MUTEX_LOCK
+#define MUTEX_UNLOCK
 
 extern "C"
 {
 
+	static JNIEnv* firstEnv = 0;
+
 	static JavaVM* m_jvm;
 
-	static JNIEnv *getEnv()
+	static bool getEnv(JNIEnv **jniEnv)
 	{
+		bool attached = false;
+		int status = 0;
+
 		if(!m_jvm)
 		{
 			LOGI("ERROR, jvm for getEnv is NULL, make sure you load the library first");
-			return NULL;
+			return false;
 		}
 
-		JNIEnv* jniEnv = 0;
+		status = (m_jvm)->GetEnv((void **) jniEnv, JNI_VERSION_1_6);
 
-		int status = (m_jvm)->GetEnv((void **) &jniEnv, JNI_VERSION_1_4);
-
-		if(status < 0)
+		if(status == JNI_EDETACHED)
 		{
-
-			status = (m_jvm)->AttachCurrentThread(&jniEnv, NULL);
+			LOGI("getEnv: Thread not attached, attaching...");
+			(m_jvm)->DetachCurrentThread();
+			status = (m_jvm)->AttachCurrentThread(jniEnv, NULL);
 
 			if(status < 0)
 			{
 				LOGI("getEnv: ERROR failed to attach current thread");
 			}
+			attached = true;
 		}
 
-		if(!jniEnv)
+		if(!*jniEnv)
 			LOGI("ERROR, getEnv env is NULL");
 
-		return jniEnv;
+		if(firstEnv == 0)
+			firstEnv = *jniEnv;
+
+		return attached;
 	}
+
+	static jclass FileJNI_cls;
+	static jmethodID fopen_method;
+	static jmethodID fclose_method;
+	static jmethodID mkdir_method;
+	static jmethodID exists_method;
 
 	__attribute__((visibility("default"))) jint JNI_OnLoad(JavaVM* vm, void* reserved)
 	{
 		LOGI("JNI_OnLoad");
 		m_jvm = vm;
-		return JNI_VERSION_1_4;
+		pthread_mutex_init(&lock, NULL);
+
+		JNIEnv *env;
+	 	vm->GetEnv ((void **) &env, JNI_VERSION_1_4);
+
+        jclass cls = (env)->FindClass("com/opentouchgaming/saffal/FileJNI");
+		FileJNI_cls = (jclass)(env->NewGlobalRef(cls));
+
+		fopen_method = (env)->GetStaticMethodID(FileJNI_cls, "fopen", "(Ljava/lang/String;Ljava/lang/String;)I");
+		//fclose_method = (env)->GetStaticMethodID(FileJNI_cls, "fclose", "(I)I");
+		mkdir_method = (env)->GetStaticMethodID(FileJNI_cls, "mkdir", "(Ljava/lang/String;)I");
+		exists_method = (env)->GetStaticMethodID(FileJNI_cls, "exists", "(Ljava/lang/String;)I");
+
+		return JNI_VERSION_1_6;
 	}
 
 
@@ -63,86 +100,74 @@ extern "C"
 
 	int FileJNI_fopen(const char * filename, const char * mode)
 	{
-		JNIEnv *env = getEnv();
+		MUTEX_LOCK
 
-		// Load fopen Java function
-		// TODO: These should be cached (PER THREAD). If only one thread access this they can set once and saved
-		jclass fopen_cls;
-		jmethodID fopen_method;
+		JNIEnv *env = NULL;
+		bool attached = getEnv(&env);
 
-		fopen_cls = (env)->FindClass("com/opentouchgaming/saffal/FileJNI");
-		fopen_method = (env)->GetStaticMethodID(fopen_cls, "fopen", "(Ljava/lang/String;Ljava/lang/String;)I");
 
 		jstring filenameStr = (env)->NewStringUTF(filename);
 		jstring modeStr = (env)->NewStringUTF(mode);
 
 		// Call Java function
 		// Returns -1 for invalid file in SAF. Else a valid FD
-		int ret = (env)->CallStaticIntMethod(fopen_cls, fopen_method, filenameStr, modeStr);
+		int ret = (env)->CallStaticIntMethod(FileJNI_cls, fopen_method, filenameStr, modeStr);
 
 		(env)->DeleteLocalRef(filenameStr);
 		(env)->DeleteLocalRef(modeStr);
 
+		MUTEX_UNLOCK
 		return ret;
 	}
 
 	int FileJNI_fclose(int fd)
 	{
-		JNIEnv *env = getEnv();
+		MUTEX_LOCK
 
-		// Load fopen Java function
-		jclass fclose_cls;
-		jmethodID fclose_method;
+		JNIEnv *env = NULL;
+		bool attached = getEnv(&env);
 
-		fclose_cls = (env)->FindClass("com/opentouchgaming/saffal/FileJNI");
-		fclose_method = (env)->GetStaticMethodID(fclose_cls, "fclose", "(I)I");
+		int ret = (env)->CallStaticIntMethod(FileJNI_cls, fclose_method, fd);
 
-		int ret = (env)->CallStaticIntMethod(fclose_cls, fclose_method, fd);
+		MUTEX_UNLOCK
 
 		return ret;
 	}
 
 	int FileJNI_mkdir(const char * path)
 	{
-		JNIEnv *env = getEnv();
+		MUTEX_LOCK
 
-		// Load fopen Java function
-		jclass mkdir_cls;
-		jmethodID mkdir_method;
-
-		mkdir_cls = (env)->FindClass("com/opentouchgaming/saffal/FileJNI");
-		mkdir_method = (env)->GetStaticMethodID(mkdir_cls, "mkdir", "(Ljava/lang/String;)I");
+		JNIEnv *env = NULL;
+		bool attached = getEnv(&env);
 
 		jstring pathStr = (env)->NewStringUTF(path);
 
 		// Call Java function
-		int ret = (env)->CallStaticIntMethod(mkdir_cls, mkdir_method, pathStr);
+		int ret = (env)->CallStaticIntMethod(FileJNI_cls, mkdir_method, pathStr);
 
 		(env)->DeleteLocalRef(pathStr);
 
+		MUTEX_UNLOCK
 		return ret;
 	}
 
 	int FileJNI_exists(const char * path)
 	{
-		JNIEnv *env = getEnv();
+		MUTEX_LOCK
 
-		// Load fopen Java function
-		jclass exists_cls;
-		jmethodID exists_method;
-
-		exists_cls = (env)->FindClass("com/opentouchgaming/saffal/FileJNI");
-		exists_method = (env)->GetStaticMethodID(exists_cls, "exists", "(Ljava/lang/String;)I");
+		JNIEnv *env = NULL;
+		bool attached = getEnv(&env);
 
 		jstring pathStr = (env)->NewStringUTF(path);
 
 		// Call Java function
-		int ret = (env)->CallStaticIntMethod(exists_cls, exists_method, pathStr);
+		int ret = (env)->CallStaticIntMethod(FileJNI_cls, exists_method, pathStr);
 
 		(env)->DeleteLocalRef(pathStr);
 
+		MUTEX_UNLOCK
+
 		return ret;
-
 	}
-
 }

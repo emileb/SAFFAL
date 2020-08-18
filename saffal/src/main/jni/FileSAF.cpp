@@ -65,6 +65,8 @@ extern "C"
 //------------------------
 	int open(const char *path, int oflag)
 	{
+		//LOGI("open %s", path);
+
 		// Remove relative paths (../ etc)
 		std::string fullFilename = getCanonicalPath(path);
 
@@ -109,6 +111,8 @@ extern "C"
 	*/
 	FILE * fopen(const char * filename, const char * mode)
 	{
+		//LOGI("fopen %s", filename);
+
 		if(filename == NULL || mode == NULL)
 		{
 			LOGI("fopen: filename or mode is null");
@@ -161,7 +165,7 @@ extern "C"
 //------------------------
 	int fclose(FILE * file)
 	{
-		LOGI("fclose %p", file);
+	 	//LOGI("fclose %p", file);
 
 		static int (*fclose_real)(FILE * file) = NULL;
 
@@ -210,7 +214,7 @@ extern "C"
 //------------------------
 	int stat(const char *path, struct stat *statbuf)
 	{
-		// LOGI("stat %s", path);
+		//LOGI("stat %s", path);
 
 		std::string fullFilename = getCanonicalPath(path);
 
@@ -249,7 +253,7 @@ extern "C"
 //------------------------
 	int access(const char *pathname, int mode)
 	{
-		LOGI("access %s", pathname);
+	 	//LOGI("access %s", pathname);
 
 		bool inSAF = isInSAF(pathname);
 
@@ -277,7 +281,7 @@ extern "C"
 //------------------------
 	DIR *opendir(const char *name)
 	{
-		LOGI("opendir %s", name);
+		//LOGI("opendir %s", name);
 
 		std::string fullFilename = getCanonicalPath(name);
 
@@ -310,7 +314,6 @@ extern "C"
 			return opendir_real(name);
 		}
 	}
-
 }
 
 #endif
