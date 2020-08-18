@@ -2,8 +2,9 @@ package com.opentouchgaming.saffal;
 
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
-import android.support.annotation.RequiresApi;
 import android.util.Log;
+
+import androidx.annotation.RequiresApi;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -20,9 +21,6 @@ public class FileSAF extends File{
     boolean isRealFile = false;
     // is Directory
     boolean isDirectory;
-
-    // Real document;
-    //DocumentFile docFile;
 
     DocumentNode documentNode;
 
@@ -61,6 +59,21 @@ public class FileSAF extends File{
         else {
             updateDocumentNode(false);
             return isDirectory;
+        }
+    }
+
+    @Override
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public boolean canWrite() {
+        if(isRealFile)
+            return super.canWrite();
+        else {
+            updateDocumentNode(true);
+            if (documentNode != null) {
+                // Presume we can always write to SAF area
+                return true;
+            }
+            return false;
         }
     }
 
