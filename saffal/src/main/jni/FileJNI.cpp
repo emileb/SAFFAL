@@ -10,12 +10,13 @@
 
 static pthread_mutex_t lock;
 
-
+#if 0
 #define MUTEX_LOCK  pthread_mutex_lock(&lock);
 #define MUTEX_UNLOCK  if(attached) (m_jvm)->DetachCurrentThread(); pthread_mutex_unlock(&lock);
-
+#else
 #define MUTEX_LOCK
 #define MUTEX_UNLOCK
+#endif
 
 extern "C"
 {
@@ -64,6 +65,7 @@ extern "C"
 	static jmethodID fclose_method;
 	static jmethodID mkdir_method;
 	static jmethodID exists_method;
+	static jmethodID opendir_method;
 
 	__attribute__((visibility("default"))) jint JNI_OnLoad(JavaVM* vm, void* reserved)
 	{
@@ -81,6 +83,7 @@ extern "C"
 		//fclose_method = (env)->GetStaticMethodID(FileJNI_cls, "fclose", "(I)I");
 		mkdir_method = (env)->GetStaticMethodID(FileJNI_cls, "mkdir", "(Ljava/lang/String;)I");
 		exists_method = (env)->GetStaticMethodID(FileJNI_cls, "exists", "(Ljava/lang/String;)I");
+		opendir_method = (env)->GetStaticMethodID(FileJNI_cls, "opendir", "(Ljava/lang/String;)[Ljava/lang/String;");
 
 		return JNI_VERSION_1_6;
 	}
@@ -170,4 +173,39 @@ extern "C"
 
 		return ret;
 	}
+
+	std::vector<std::string> FIleJNI_opendir(const char * path)
+	{
+		MUTEX_LOCK
+
+		JNIEnv *env = NULL;
+		bool attached = getEnv(&env);
+
+		jstring pathStr = (env)->NewStringUTF(path);
+
+		// Call Java function
+		// Returns and array of items in the directory. Will return an array of zero items if not found (or empty)
+	 	jobjectArray jniItems = (jobjectArray)(env)->CallStaticObjectMethod(FileJNI_cls, opendir_method, pathStr);
+
+		(env)->DeleteLocalRef(pathStr);
+
+
+		MUTEX_UNLOCK
+
+	 	int size = env->GetArrayLength(jniItems);
+
+		std::vector<std::string> items;
+
+		for( int i = 0; i < size; i++ )
+		{
+		    jstring string = (jstring)env->GetObjectArrayElement(jniItems, i);
+            const char* item = env->GetStringUTFChars(string, 0);
+            items.push_back(item);
+            env->ReleaseStringUTFChars(string, item);
+            env->DeleteLocalRef(string);
+		}
+
+		return items;
+	}
+
 }

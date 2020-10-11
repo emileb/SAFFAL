@@ -61,4 +61,14 @@ public class FileJNI {
             return 0;
         }
     }
+
+
+    public static String[] opendir(String path) {
+
+        Log.d(TAG, "opendir path = " + path);
+
+        FileSAF fileSAF = new FileSAF(path);
+
+        return new String[] {"hello", "world"};
+    }
 }

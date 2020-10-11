@@ -11,6 +11,8 @@
 
 #include <string>
 #include <map>
+#include <vector>
+#include <set>
 
 #include <android/log.h>
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileSAF NDK", __VA_ARGS__))
@@ -48,7 +50,6 @@ extern "C"
 		else
 			func = dlsym(libc, name);
 
-
 		if(func == NULL)
 		{
 			LOGI("ERROR, func %s not loaded, this is bad, really bad, seg fault ahead..", name);
@@ -65,7 +66,7 @@ extern "C"
 //------------------------
 	int open(const char *path, int oflag)
 	{
-		//LOGI("open %s", path);
+		LOGI("open %s", path);
 
 		// Remove relative paths (../ etc)
 		std::string fullFilename = getCanonicalPath(path);
@@ -111,7 +112,7 @@ extern "C"
 	*/
 	FILE * fopen(const char * filename, const char * mode)
 	{
-		//LOGI("fopen %s", filename);
+		LOGI("fopen %s", filename);
 
 		if(filename == NULL || mode == NULL)
 		{
@@ -253,7 +254,7 @@ extern "C"
 //------------------------
 	int access(const char *pathname, int mode)
 	{
-	 	//LOGI("access %s", pathname);
+	 	LOGI("access %s", pathname);
 
 		bool inSAF = isInSAF(pathname);
 
@@ -276,12 +277,21 @@ extern "C"
 		}
 	}
 
+
+	class DIR_SAF
+	{
+		int position;
+		std::vector<struct dirent> items;
+	};
+
+	std::set<DIR_SAF *> openDIRS;
+
 //------------------------
 // opendir INTERCEPT
 //------------------------
 	DIR *opendir(const char *name)
 	{
-		//LOGI("opendir %s", name);
+		LOGI("opendir %s", name);
 
 		std::string fullFilename = getCanonicalPath(name);
 
@@ -289,6 +299,8 @@ extern "C"
 
 		if(inSAF)
 		{
+
+#if 0 // FUCK SAKE, final version of Android 11 breaks this, it only lists directories and no files
 			// Try to get an fd
             int fd = FileJNI_fopen(fullFilename.c_str(), "r");
 
@@ -303,6 +315,17 @@ extern "C"
             {
                 return NULL;
             }
+#endif
+
+			std::vector<std::string> items = FIleJNI_opendir(fullFilename.c_str());
+			if(items.size() > 0)
+			{
+
+			}
+			else
+			{
+				return NULL;
+			}
 		}
 		else
 		{
@@ -313,6 +336,34 @@ extern "C"
 
 			return opendir_real(name);
 		}
+	}
+}
+
+//------------------------
+// opendir INTERCEPT
+//------------------------
+struct dirent *readdir(DIR *dirp)
+{
+	LOGI("readdir %p", dirp);
+
+	DIR_SAF* dirSafe = (DIR_SAF*)dirp; // TODO sort out C style casts
+
+	std::set<DIR_SAF *>::iterator it = openDIRS.find(dirSafe);
+
+	if (it != openDIRS.end()) { // It is in out list
+
+
+		return NULL;
+	}
+	else // Not in our list, use system readdir
+	{
+
+		static struct dirent *(*readdir_real)(DIR *dirp) = NULL;
+
+		if(readdir_real == NULL)
+			readdir_real = (struct dirent * (*)(DIR *dirp))loadRealFunc("readdir");
+
+		return readdir_real(dirp);
 	}
 }
 
