@@ -27,17 +27,20 @@ extern "C"
 	static void* loadRealFunc(const char * name)
 	{
 		static void * libc = NULL;
-		if( libc == NULL )
+
+		if(libc == NULL)
 		{
 			libc = dlopen("libc.so", 0);
+
 			if(!libc)
 			{
 				LOGI("ERROR LIBC NOT LOADED");
 			}
+
 			LOGI("fopen = %p", dlsym(libc, "fopen"));
 			LOGI("__open_2 = %p", dlsym(libc, "__open_2"));
 			LOGI("open = %p", dlsym(libc, "open"));
-            LOGI("fclose = %p", dlsym(libc, "fclose"));
+			LOGI("fclose = %p", dlsym(libc, "fclose"));
 			LOGI("stat = %p", dlsym(libc, "stat"));
 			LOGI("access = %p", dlsym(libc, "access"));
 			LOGI("opendir = %p", dlsym(libc, "opendir"));
@@ -166,7 +169,7 @@ extern "C"
 //------------------------
 	int fclose(FILE * file)
 	{
-	 	//LOGI("fclose %p", file);
+		//LOGI("fclose %p", file);
 
 		static int (*fclose_real)(FILE * file) = NULL;
 
@@ -176,39 +179,39 @@ extern "C"
 		return fclose_real(file);
 	}
 
-/*  TODO
-//------------------------
-// mkdir INTERCEPT
-//------------------------
-	int mkdir(const char *path, mode_t mode)
-	{
-		// Remove relative paths (../ etc)
-		std::string fullPath = getCanonicalPath(path);
-
-		LOGI("mkdir %s, %d. fullPath %s", path, mode, fullPath.c_str());
-
-		// status = -1, not in SAF area, status = 0 is OK, status = 1 failed
-		int status = FileJNI_mkdir(fullPath.c_str());
-
-		if(status == 0)
+	/*  TODO
+	//------------------------
+	// mkdir INTERCEPT
+	//------------------------
+		int mkdir(const char *path, mode_t mode)
 		{
-			return 0; // OK
-		}
-		else if(status == 1)
-		{
-			return -1; // Failed
-		}
-		else // Not in SAF, use real function
-		{
-			static int (*mkdir_real)(const char *path, mode_t mode) = NULL;
+			// Remove relative paths (../ etc)
+			std::string fullPath = getCanonicalPath(path);
 
-			if(mkdir_real == NULL)
-				mkdir_real = (int(*)(const char *path, mode_t mode))loadRealFunc("mkdir");
+			LOGI("mkdir %s, %d. fullPath %s", path, mode, fullPath.c_str());
 
-			return mkdir_real(path, mode);
+			// status = -1, not in SAF area, status = 0 is OK, status = 1 failed
+			int status = FileJNI_mkdir(fullPath.c_str());
+
+			if(status == 0)
+			{
+				return 0; // OK
+			}
+			else if(status == 1)
+			{
+				return -1; // Failed
+			}
+			else // Not in SAF, use real function
+			{
+				static int (*mkdir_real)(const char *path, mode_t mode) = NULL;
+
+				if(mkdir_real == NULL)
+					mkdir_real = (int(*)(const char *path, mode_t mode))loadRealFunc("mkdir");
+
+				return mkdir_real(path, mode);
+			}
 		}
-	}
-*/
+	*/
 
 //------------------------
 // opendir INTERCEPT
@@ -254,7 +257,7 @@ extern "C"
 //------------------------
 	int access(const char *pathname, int mode)
 	{
-	 	LOGI("access %s", pathname);
+		LOGI("access %s", pathname);
 
 		bool inSAF = isInSAF(pathname);
 
@@ -280,6 +283,7 @@ extern "C"
 
 	class DIR_SAF
 	{
+	public:
 		int position;
 		std::vector<struct dirent> items;
 	};
@@ -300,32 +304,67 @@ extern "C"
 		if(inSAF)
 		{
 
-#if 0 // FUCK SAKE, final version of Android 11 breaks this, it only lists directories and no files
+#if 0 // FFS, final version of Android 11 breaks this, it only lists directories and no files
 			// Try to get an fd
-            int fd = FileJNI_fopen(fullFilename.c_str(), "r");
+			int fd = FileJNI_fopen(fullFilename.c_str(), "r");
 
-            if(fd > 0)   // File was in SAF area
-            {
-                // YES, surprisingly fdopendir actually works with the fd from SAF.
-                // This means I don't need to reimplement it
-                DIR* ret = fdopendir(fd);
-                return ret;
-            }
-            else
-            {
-                return NULL;
-            }
-#endif
-
-			std::vector<std::string> items = FIleJNI_opendir(fullFilename.c_str());
-			if(items.size() > 0)
+			if(fd > 0)   // File was in SAF area
 			{
-
+				// YES, surprisingly fdopendir actually works with the fd from SAF.
+				// This means I don't need to reimplement it
+				DIR* ret = fdopendir(fd);
+				return ret;
 			}
 			else
 			{
 				return NULL;
 			}
+
+#else
+			std::vector<std::string> items = FIleJNI_opendir(fullFilename.c_str());
+
+			if(items.size() > 0)
+			{
+				// Create out own DIR object and fill with the data we need
+				DIR_SAF* dirSaf = new DIR_SAF();
+				dirSaf->position = 0;
+
+				// Copy the items to out DIR object
+				for(auto it = begin(items); it != end(items); ++it)
+				{
+					struct dirent d = {};
+
+					// The first character of the name is the type (F = file, D = directory)
+					std::string type = it->substr(0, 1);
+					std::string name = it->substr(1);
+
+					LOGI("Adding %s, type = %s", name.c_str(), type.c_str());
+
+					if(type == "F")
+						d.d_type = DT_REG;
+					else if(type == "D")
+						d.d_type = DT_DIR;
+					else
+						d.d_type = DT_UNKNOWN;
+
+					// Copy name
+					strcpy(d.d_name, name.c_str());
+
+					// Add the item
+					dirSaf->items.push_back(d);
+				}
+
+				// Add it to our list to remember this is ours
+				openDIRS.insert(dirSaf);
+
+				return (DIR *)dirSaf;
+			}
+			else
+			{
+				return NULL;
+			}
+
+#endif
 		}
 		else
 		{
@@ -350,21 +389,53 @@ struct dirent *readdir(DIR *dirp)
 
 	std::set<DIR_SAF *>::iterator it = openDIRS.find(dirSafe);
 
-	if (it != openDIRS.end()) { // It is in out list
-
-
-		return NULL;
-	}
-	else // Not in our list, use system readdir
+	if(it != openDIRS.end())    // It is in out list
 	{
-
-		static struct dirent *(*readdir_real)(DIR *dirp) = NULL;
+		if(dirSafe->position < dirSafe->items.size())
+		{
+			return &dirSafe->items.at(dirSafe->position++);
+		}
+		else
+		{
+			return NULL;
+		}
+	}
+	else // Not in our list,  use system the version
+	{
+		static struct dirent *(*readdir_real)(DIR * dirp) = NULL;
 
 		if(readdir_real == NULL)
-			readdir_real = (struct dirent * (*)(DIR *dirp))loadRealFunc("readdir");
+			readdir_real = (struct dirent * (*)(DIR * dirp))loadRealFunc("readdir");
 
 		return readdir_real(dirp);
 	}
 }
 
+//------------------------
+// closedir INTERCEPT
+//------------------------
+int closedir(DIR *dirp)
+{
+	LOGI("closedir %p", dirp);
+
+	DIR_SAF* dirSafe = (DIR_SAF*)dirp; // TODO sort out C style casts
+
+	std::set<DIR_SAF *>::iterator it = openDIRS.find(dirSafe);
+
+	if(it != openDIRS.end())    // It is in out list
+	{
+		openDIRS.erase(dirSafe);
+		delete dirSafe;
+		return 0;
+	}
+	else // Not in our list, use system the version
+	{
+		static int (*closedir_real)(DIR * dirp) = NULL;
+
+		if(closedir_real == NULL)
+			closedir_real = (int (*)(DIR * dirp))loadRealFunc("closedir");
+
+		return closedir_real(dirp);
+	}
+}
 #endif

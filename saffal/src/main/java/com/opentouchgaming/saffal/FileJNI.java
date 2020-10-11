@@ -1,9 +1,9 @@
 package com.opentouchgaming.saffal;
 
+import android.os.Build;
 import android.util.Log;
 
-import java.io.IOException;
-import java.util.ArrayList;
+import androidx.annotation.RequiresApi;
 
 public class FileJNI {
     final static String TAG = "FileJNI JAVA";
@@ -29,6 +29,7 @@ public class FileJNI {
 
 
     public static int mkdir(String path) {
+
         Log.d(TAG, "mkdir path = " + path);
 
         FileSAF fileSAF = new FileSAF(path);
@@ -62,13 +63,32 @@ public class FileJNI {
         }
     }
 
-
+    /**
+     * Try to open the path in SAF and return a string array of the items in the directory
+     * @param path
+     * @return String array of the items in the directory. Appened with F (is a file) or D (if a directory)
+     */
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public static String[] opendir(String path) {
 
         Log.d(TAG, "opendir path = " + path);
 
         FileSAF fileSAF = new FileSAF(path);
 
-        return new String[] {"hello", "world"};
+        if (fileSAF.exists() && fileSAF.isDirectory) {
+
+            FileSAF[] files = fileSAF.listFiles();
+            String[] ret = new String[files.length];
+
+            for(int n = 0; n < files.length; n++)
+            {
+                ret[n] = (files[n].isDirectory() ? "D" : "F") + files[n].getName();
+            }
+
+            return ret;
+        }
+        else {
+            return new String[]{};
+        }
     }
 }
