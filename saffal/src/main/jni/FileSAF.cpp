@@ -1,5 +1,6 @@
 #include "FileSAF.h"
 #include "FileJNI.h"
+#include "FileCache.h"
 #include "Utils.h"
 
 #include <stdio.h>
@@ -78,10 +79,8 @@ extern "C"
 
 		if(inSAF)
 		{
-			LOGI("open %s", path);
-
 			// fd = -1, not in SAF area, fd = 0, failed to open. Otherwise valid file
-			int fd = FileJNI_fopen(fullFilename.c_str(), "r");
+			int fd = FileCache_getFd(fullFilename.c_str(), "r");
 
 			if(fd > 0)
 				return fd;
@@ -136,7 +135,7 @@ extern "C"
 		if(inSAF)
 		{
 			// fd = -1 failed to open. Otherwise valid file
-			int fd = FileJNI_fopen(fullFilename.c_str(), mode);
+			int fd = FileCache_getFd(fullFilename.c_str(), mode);
 
 			LOGI("fopen: file = %s, mode = %s, fd = %d", fullFilename.c_str(), mode, fd);
 
@@ -169,7 +168,9 @@ extern "C"
 //------------------------
 	int fclose(FILE * file)
 	{
-		//LOGI("fclose %p", file);
+		LOGI("fclose %p", file);
+
+		FileCache_closeFile(file);
 
 		static int (*fclose_real)(FILE * file) = NULL;
 
@@ -177,6 +178,20 @@ extern "C"
 			fclose_real = (int(*)(FILE * file))loadRealFunc("fclose");
 
 		return fclose_real(file);
+	}
+
+	int close(int fd)
+	{
+		LOGI("close %d", fd);
+
+		FileCache_closeFd(fd);
+
+		static int (*close_real)(int) = NULL;
+
+		if(close_real == NULL)
+			close_real = (int(*)(int))loadRealFunc("close");
+
+		return close_real(fd);
 	}
 
 	/*  TODO
@@ -227,7 +242,7 @@ extern "C"
 		if(inSAF)
 		{
 			// Try to get an fd
-			int fd = FileJNI_fopen(fullFilename.c_str(), "r");
+			int fd = FileCache_getFd(fullFilename.c_str(), "r");
 
 			if(fd > 0)   // File was in SAF area
 			{
@@ -259,12 +274,14 @@ extern "C"
 	{
 		LOGI("access %s", pathname);
 
-		bool inSAF = isInSAF(pathname);
+		std::string fullFilename = getCanonicalPath(pathname);
+
+		bool inSAF = isInSAF(fullFilename);
 
 		if(inSAF)
 		{
 			// TODO! Check mode for access bits
-			if(FileJNI_exists(pathname))
+			if(FileJNI_exists(fullFilename.c_str()))
 				return 0;
 			else
 				return -1;
@@ -306,7 +323,7 @@ extern "C"
 
 #if 0 // FFS, final version of Android 11 breaks this, it only lists directories and no files
 			// Try to get an fd
-			int fd = FileJNI_fopen(fullFilename.c_str(), "r");
+			int fd = FileCache_getFd(fullFilename.c_str(), "r");
 
 			if(fd > 0)   // File was in SAF area
 			{
