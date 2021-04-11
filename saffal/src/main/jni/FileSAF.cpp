@@ -18,6 +18,8 @@
 #include <android/log.h>
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileSAF NDK", __VA_ARGS__))
 
+#define LOGI(...)
+
 // Use to disable interception
 #if 1
 
@@ -68,9 +70,9 @@ extern "C"
 // The only reason this is here is because one engine I use uses 'open' to test the presence of a file
 // There could be weird bugs with this..
 //------------------------
-	int open(const char *path, int oflag)
+	int open(const char *path, int oflag, mode_t modes)
 	{
-		LOGI("open %s", path);
+		LOGI("open %s, %d %d", path, oflag, modes);
 
 		// Remove relative paths (../ etc)
 		std::string fullFilename = getCanonicalPath(path);
@@ -91,21 +93,31 @@ extern "C"
 		{
 			// Load the real function
 
-			static int(*open_real)(const char *path, int oflag) = NULL;
+			static int(*open_real)(const char *path, int oflag, mode_t modes) = NULL;
 
 			if(open_real == NULL)
-				open_real = (int(*)(const char *path, int oflag))loadRealFunc("__open_2");
+				open_real = (int(*)(const char *path, int oflag, mode_t modes))loadRealFunc("open");
 
-			return open_real(path, oflag);
+			return open_real(path, oflag, modes);
 		}
 	}
 
 	// Android fcntl.h calls this function instead
-	int __open_2(const char *path, int oflag)
+	int __open_2(const char *path, int oflag, mode_t modes)
 	{
-		return open(path, oflag);
+		return open(path, oflag, modes);
 	}
+/*
+	int __open_real(const char *path, int oflag, mode_t modes)
+	{
+		static int(*open_real)(const char *path, int oflag, mode_t modes) = NULL;
 
+		if(open_real == NULL)
+			open_real = (int(*)(const char *path, int oflag, mode_t modes))loadRealFunc("open");
+
+		return open_real(path, oflag, modes);
+	}
+*/
 //------------------------
 // fopen INTERCEPT
 //------------------------
