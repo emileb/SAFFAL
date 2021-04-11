@@ -9,31 +9,50 @@
 #include <string>
 #include <vector>
 
+#include <pthread.h>
+
 #include <android/log.h>
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileCache NDK", __VA_ARGS__))
 
+#define LOGI(...)
 
-class CachedItem
-{
-public:
-	//std::string path;
-	std::vector<int> fds;
-};
+
+static pthread_mutex_t lock;
+
+#if 1
+#define MUTEX_LOCK  pthread_mutex_lock(&lock);
+#define MUTEX_UNLOCK  pthread_mutex_unlock(&lock);
+#else
+#define MUTEX_LOCK
+#define MUTEX_UNLOCK
+#endif
+
 
 static std::map<int, std::string> cacheActive;
+static std::map<std::string, int> cacheFree;
 
-static std::map<std::string, CachedItem> cacheFree;
-
+void FileCache_init()
+{
+	pthread_mutex_init(&lock, NULL);
+}
+#include <sys/types.h>
 
 int FileCache_getFd(const char * filename, const char * mode)
 {
+	MUTEX_LOCK
+
+//	pid_t tid = gettid();
+//	LOGI("tid = %d", tid);
 
 	int fd = 0;
+
+	static char fileTag[256]; // Need to include the filename AND the mode, can not mix modes
+	snprintf(fileTag, 256, "%s - %s", filename, mode);
 
 	//LOGI("FileCache_getFd %s, %s", filename, mode);
 
 	// Check if file is in our cache
-	if(cacheFree.find(filename) == cacheFree.end())      // not found
+	if(cacheFree.find(fileTag) == cacheFree.end())      // not found
 	{
 		//LOGI("FileCache_getFd NOT FOUND");
 		fd = FileJNI_fopen(filename, mode);
@@ -45,17 +64,13 @@ int FileCache_getFd(const char * filename, const char * mode)
 	}
 	else  // found
 	{
+		// Get cached fd
+		fd = cacheFree[fileTag];
 
-		// Read fd
-		fd = cacheFree[filename].fds.at(0);
-		LOGI("FileCache_getFd %s(%s) FOUND, fd = %d", filename,mode, fd);
-		// Remove the fd from the free cache
-		cacheFree[filename].fds.erase(cacheFree[filename].fds.begin());
+		//Remove from free cache
+		cacheFree.erase(fileTag);
 
-		if(cacheFree[filename].fds.size() == 0)
-		{
-			cacheFree.erase(filename);
-		}
+		LOGI("FileCache_getFd %s(%s) FOUND, fd = %d", filename, mode, fd);
 
 		// Reset the fd position
 		lseek(fd, 0, SEEK_SET);
@@ -66,57 +81,56 @@ int FileCache_getFd(const char * filename, const char * mode)
 	// FD should always be unique, so map works
 	if(fd > 0)
 	{
-		cacheActive[fd] = filename;
+		cacheActive[fd] = fileTag;
 	}
+
+	MUTEX_UNLOCK
 
 	return fd;
 }
 
 static void closeFd(int fd)
 {
+	MUTEX_LOCK
+
 	if(cacheActive.find(fd) == cacheActive.end())      // not found
 	{
 		LOGI("FileCache_closeFile NOT FOUND");
 	}
 	else
 	{
-		// Make a copy of the FD so the one held in FILE can be close
-		int fdCopy = dup(fd);
-
 		LOGI("FileCache_closeFile FOUND  %s", cacheActive[fd].c_str());
 
-		if(cacheFree.find(cacheActive[fd]) == cacheFree.end())      // not found
+#if 1
+		// If we havn't already got a cached of this file, add it now
+		if(cacheFree.find(cacheActive[fd]) == cacheFree.end())
 		{
-			LOGI("FileCache_closeFile NEW %d", fdCopy);
+			// Make a copy of the FD so the one held in FILE can be close
+			int fdCopy = dup(fd);
 
-			CachedItem newItem;
-			newItem.fds.push_back(fdCopy);
-			cacheFree[cacheActive[fd]] = newItem;
+			// Save new fd to the free cache
+			LOGI("FileCache_closeFile CACHEING %d", fdCopy);
+
+			cacheFree[cacheActive[fd]] = fdCopy;
 		}
-		else
-		{
-			LOGI("FileCache_closeFile UPDATE fd = %d", fdCopy);
-
-			cacheFree[cacheActive[fd]].fds.push_back(fdCopy);
-		}
-
+#endif
+		// Remove the old fd from the current active cache
 		cacheActive.erase(fd);
 	}
+
+	MUTEX_UNLOCK
 }
 
 int FileCache_closeFd(int fd)
 {
 	closeFd(fd);
-
 	return 0;
 }
 
 int FileCache_closeFile(FILE * file)
 {
 	int fd = fileno(file);
-
 	closeFd(fd);
-
 	return 0;
 }
 

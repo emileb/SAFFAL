@@ -1,5 +1,6 @@
 
 #include "FileJNI.h"
+#include "FileCache.h"
 #include "Utils.h"
 
 #include <android/log.h>
@@ -84,6 +85,8 @@ extern "C" __attribute__((visibility("default"))) jint JNI_OnLoad(JavaVM* vm, vo
 	mkdir_method = (env)->GetStaticMethodID(FileJNI_cls, "mkdir", "(Ljava/lang/String;)I");
 	exists_method = (env)->GetStaticMethodID(FileJNI_cls, "exists", "(Ljava/lang/String;)I");
 	opendir_method = (env)->GetStaticMethodID(FileJNI_cls, "opendir", "(Ljava/lang/String;)[Ljava/lang/String;");
+
+	FileCache_init();
 
 	return JNI_VERSION_1_6;
 }
