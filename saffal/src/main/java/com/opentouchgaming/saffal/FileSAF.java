@@ -30,8 +30,12 @@ public class FileSAF extends File{
     // FD if getFd called
     int fd;
 
-    public FileSAF(String path,String name) {
+    public FileSAF(String path, String name) {
         this(path + "/" + name);
+    }
+
+    public FileSAF(FileSAF path, String name) {
+        this(path.getPath() + "/" + name);
     }
 
     public FileSAF(String path) {
@@ -45,6 +49,11 @@ public class FileSAF extends File{
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public boolean isRealFile()
+    {
+        return isRealFile;
     }
 
     public String getPath() {
@@ -239,6 +248,24 @@ public class FileSAF extends File{
         }
 
         return file;
+    }
+
+    @Override
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public String[] list() {
+        if(isRealFile)
+        {
+            return super.list();
+        }
+        else
+        {
+            ArrayList<String> strRet = new ArrayList<>();
+            FileSAF[] files = listFiles();
+            for (FileSAF file : files) {
+                strRet.add(file.getName());
+            }
+            return strRet.toArray(new String[files.length]);
+        }
     }
 
     @Override
