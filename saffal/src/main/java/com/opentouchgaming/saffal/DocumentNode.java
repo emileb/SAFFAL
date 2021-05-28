@@ -148,11 +148,17 @@ public class DocumentNode
             {
                 Uri myUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
 
-                if (directory)
-                    DocumentsContract.createDocument(UtilsSAF.getContentResolver(), myUri, DocumentsContract.Document.MIME_TYPE_DIR, name);
-                else
-                    DocumentsContract.createDocument(UtilsSAF.getContentResolver(), myUri, mimeType, name);
-
+                try
+                {
+                    if (directory)
+                        DocumentsContract.createDocument(UtilsSAF.getContentResolver(), myUri, DocumentsContract.Document.MIME_TYPE_DIR, name);
+                    else
+                        DocumentsContract.createDocument(UtilsSAF.getContentResolver(), myUri, mimeType, name);
+                }
+                catch (Exception e)
+                {
+                    throw new FileNotFoundException();
+                }
                 // We have created a new file, null the children cache so it's updated next time
                 children = null;
 
@@ -169,7 +175,6 @@ public class DocumentNode
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public InputStream getInputStream() throws FileNotFoundException
     {
-
         Uri myUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
 
         return UtilsSAF.getContentResolver().openInputStream(myUri);
@@ -212,7 +217,7 @@ public class DocumentNode
     /**
      * Create all the directories in documentPath up to the end (like mkdirs)
      *
-     * @return The node if it exists ot has been created, otherwise null;
+     * @return The node if it exists or has been created, otherwise null;
      */
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public static DocumentNode createAllNodes(DocumentNode rootNode, String documentPath) throws FileNotFoundException
@@ -223,7 +228,6 @@ public class DocumentNode
 
         if (documentPath != null)
         {
-
             // Split path into parts
             String[] parts = documentPath.split("\\/", -1);
 
@@ -236,7 +240,6 @@ public class DocumentNode
                     DBG("DocumentNode: createAllNodes: Checking part: " + part);
                     if (node != null && node.isDirectory)
                     {
-
                         DocumentNode next = node.findChild(part);
                         // Check if directory already exists
                         if (next == null)
@@ -251,7 +254,7 @@ public class DocumentNode
                     }
                     else
                     {
-                        DBG("DocumentNode: createAllNodes: Error, DocumentNode is not a directory " + node.documentId);
+                        DBG("DocumentNode: createAllNodes: Error, DocumentNode is not a directory");
                         node = null;
                         break;
                     }
