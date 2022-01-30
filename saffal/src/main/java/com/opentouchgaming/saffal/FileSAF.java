@@ -7,6 +7,7 @@ import android.util.Log;
 import androidx.annotation.RequiresApi;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -90,7 +91,27 @@ public class FileSAF extends File{
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public boolean exists() {
         if(isRealFile)
-            return super.exists();
+        {
+            boolean exists = super.exists();
+
+            if(!exists)
+            {
+                // Try to open it to test it exists also, sometimes the exists() function does not work?!
+                try
+                {
+                    FileInputStream o = new FileInputStream(this);
+                    o.close();
+                    exists = true;
+                } catch (FileNotFoundException e)
+                {
+                    //e.printStackTrace();
+                } catch (IOException e)
+                {
+                    //e.printStackTrace();
+                }
+            }
+            return exists;
+        }
         else {
             updateDocumentNode(true);
             if (documentNode != null) {
