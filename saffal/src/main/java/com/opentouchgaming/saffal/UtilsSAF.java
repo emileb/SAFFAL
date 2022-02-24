@@ -26,6 +26,7 @@ public class UtilsSAF {
 
     static Context context;
 
+    static int cacheNativeFs = 0;
     static boolean CASE_INSENSITIVE = true;
 
     /*
@@ -59,9 +60,9 @@ public class UtilsSAF {
      *
      * @param ctx the Context.
      */
-    public static void setContext(@NonNull Context ctx) {
-        context = ctx;
-
+    public static void setContext(@NonNull Context ctx, boolean cacheNativeFs) {
+        UtilsSAF.context = ctx;
+        UtilsSAF.cacheNativeFs = cacheNativeFs ? 1: 0;
         // Load C library
         System.loadLibrary("saffal");
     }
@@ -81,7 +82,7 @@ public class UtilsSAF {
         documentRoot.documentId = treeRoot.rootDocumentId;
 
         // Update the C library with the root path
-        FileJNI.init(treeRoot.rootPath);
+        FileJNI.init(treeRoot.rootPath, cacheNativeFs);
     }
 
     /**

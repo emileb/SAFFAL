@@ -9,7 +9,7 @@ public class FileJNI {
     final static String TAG = "FileJNI JAVA";
 
     // Init the C library, pass in the root path so the path check can be done in C code
-    public static native int init(String SAFPath);
+    public static native int init(String SAFPath, int cacheNativeFs);
 
     public static int fopen(final String filePath, final String mode) {
         // Log.d(TAG, "fopen file = " + filePath);

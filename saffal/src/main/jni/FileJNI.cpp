@@ -21,8 +21,9 @@ static pthread_mutex_t lock;
 
 
 static JNIEnv* firstEnv = 0;
-
 static JavaVM* m_jvm;
+
+extern bool cacheInvalidPaths;
 
 static bool getEnv(JNIEnv **jniEnv)
 {
@@ -92,9 +93,10 @@ extern "C" __attribute__((visibility("default"))) jint JNI_OnLoad(JavaVM* vm, vo
 }
 
 
-extern "C" void JNICALL Java_com_opentouchgaming_saffal_FileJNI_init(JNIEnv* env, jclass cls, jstring SAFPath)
+extern "C" void JNICALL Java_com_opentouchgaming_saffal_FileJNI_init(JNIEnv* env, jclass cls, jstring SAFPath, int cacheNativeFs)
 {
 	const char * SAFPathC = (const char *)(env)->GetStringUTFChars(SAFPath, 0);
+	cacheInvalidPaths = cacheNativeFs;
 
 	// Save the SAF path so we can check against it in C code
 	setSAFPath(SAFPathC);
