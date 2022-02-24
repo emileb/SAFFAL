@@ -37,7 +37,7 @@ void FileCache_init()
 }
 #include <sys/types.h>
 
-int FileCache_getFd(const char * filename, const char * mode)
+int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(const char * filename, const char * mode))
 {
 	MUTEX_LOCK
 
@@ -55,7 +55,7 @@ int FileCache_getFd(const char * filename, const char * mode)
 	if(cacheFree.find(fileTag) == cacheFree.end())      // not found
 	{
 		//LOGI("FileCache_getFd NOT FOUND");
-		fd = FileJNI_fopen(filename, mode);
+		fd = openFunc(filename, mode);
 
 		if(fd > 0)
 		{

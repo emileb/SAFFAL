@@ -82,7 +82,7 @@ extern "C"
 		if(inSAF)
 		{
 			// fd = -1, not in SAF area, fd = 0, failed to open. Otherwise valid file
-			int fd = FileCache_getFd(fullFilename.c_str(), "r");
+			int fd = FileCache_getFd(fullFilename.c_str(), "r", FileJNI_fopen);
 
 			if(fd > 0)
 				return fd;
@@ -121,12 +121,22 @@ extern "C"
 //------------------------
 // fopen INTERCEPT
 //------------------------
+
+	static int fopenGetFd(const char * filename, const char * mode)
+	{
+		static int(*open_real)(const char *path, int oflag, mode_t modes) = NULL;
+
+		if(open_real == NULL)
+			open_real = (int(*)(const char *path, int oflag, mode_t modes))loadRealFunc("open");
+
+		return open_real(filename, 0, 0);
+	}
 	/*
 	   Check if file is in SAF area and call Java to get FD if so
 	*/
 	FILE * fopen(const char * filename, const char * mode)
 	{
-		LOGI("fopen %s", filename);
+		LOGI("fopen %s, %s", filename, mode);
 
 		if(filename == NULL || mode == NULL)
 		{
@@ -147,7 +157,7 @@ extern "C"
 		if(inSAF)
 		{
 			// fd = -1 failed to open. Otherwise valid file
-			int fd = FileCache_getFd(fullFilename.c_str(), mode);
+			int fd = FileCache_getFd(fullFilename.c_str(), mode, FileJNI_fopen);
 
 			LOGI("fopen: file = %s, mode = %s, fd = %d", fullFilename.c_str(), mode, fd);
 
@@ -245,7 +255,7 @@ extern "C"
 //------------------------
 	int stat(const char *path, struct stat *statbuf)
 	{
-		//LOGI("stat %s", path);
+		LOGI("stat %s", path);
 
 		std::string fullFilename = getCanonicalPath(path);
 
@@ -254,7 +264,7 @@ extern "C"
 		if(inSAF)
 		{
 			// Try to get an fd
-			int fd = FileCache_getFd(fullFilename.c_str(), "r");
+			int fd = FileCache_getFd(fullFilename.c_str(), "r", FileJNI_fopen);
 
 			if(fd > 0)   // File was in SAF area
 			{
@@ -333,23 +343,6 @@ extern "C"
 		if(inSAF)
 		{
 
-#if 0 // FFS, final version of Android 11 breaks this, it only lists directories and no files
-			// Try to get an fd
-			int fd = FileCache_getFd(fullFilename.c_str(), "r");
-
-			if(fd > 0)   // File was in SAF area
-			{
-				// YES, surprisingly fdopendir actually works with the fd from SAF.
-				// This means I don't need to reimplement it
-				DIR* ret = fdopendir(fd);
-				return ret;
-			}
-			else
-			{
-				return NULL;
-			}
-
-#else
 			std::vector<std::string> items = FIleJNI_opendir(fullFilename.c_str());
 
 			if(items.size() > 0)
@@ -392,8 +385,6 @@ extern "C"
 			{
 				return NULL;
 			}
-
-#endif
 		}
 		else
 		{
