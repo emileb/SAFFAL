@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <libgen.h>
 
 #include <string>
 #include <map>
@@ -16,12 +17,18 @@
 #include <set>
 
 #include <android/log.h>
+#if 0
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileSAF NDK", __VA_ARGS__))
-
+#else
 #define LOGI(...)
+#endif
 
 // Use to disable interception
 #if 1
+
+// Stores paths which do not exist
+static std::map<std::string, int> invalidPaths;
+bool cacheInvalidPaths = true;
 
 extern "C"
 {
@@ -64,6 +71,52 @@ extern "C"
 		return func;
 	}
 
+	// Returns true is exists
+	bool checkPathExistsCache(const char* path)
+	{
+		bool exists = false;
+		const char *parent = dirname(path);
+		std::string parentString = parent;
+		if(parentString.length() > 2) // Check valid path
+		{
+			LOGI("parent = %s", parentString.c_str());
+			// See if we have already checked the parent path
+			if(invalidPaths.find(parentString) == invalidPaths.end())
+			{
+				// Get real 'stat' function
+				static int(*stat_real)(const char *path, struct stat * statbuf) = NULL;
+				if(stat_real == NULL)
+					stat_real = (int(*)(const char *path, struct stat * statbuf))loadRealFunc("stat");
+
+				struct stat st;
+				if(!stat_real(parentString.c_str(), &st)) // Return 0 for exists
+				{
+					// DOES exist
+					invalidPaths[parentString] = 1;
+					LOGI("DOES EXISTS");
+					exists = true;
+				}
+				else
+				{
+					// Does NOT exist
+					invalidPaths[parentString] = 0;
+					LOGI("DOES NOT EXISTS");
+				}
+			}
+			else
+			{
+				int parentExists = invalidPaths[parentString];
+				if(parentExists)
+					exists = true;
+			}
+		}
+		else
+		{
+			exists = true;
+		}
+
+		return exists;
+	}
 
 //------------------------
 // open INTERCEPT
@@ -107,21 +160,8 @@ extern "C"
 	{
 		return open(path, oflag, modes);
 	}
+
 /*
-	int __open_real(const char *path, int oflag, mode_t modes)
-	{
-		static int(*open_real)(const char *path, int oflag, mode_t modes) = NULL;
-
-		if(open_real == NULL)
-			open_real = (int(*)(const char *path, int oflag, mode_t modes))loadRealFunc("open");
-
-		return open_real(path, oflag, modes);
-	}
-*/
-//------------------------
-// fopen INTERCEPT
-//------------------------
-
 	static int fopenGetFd(const char * filename, const char * mode)
 	{
 		static int(*open_real)(const char *path, int oflag, mode_t modes) = NULL;
@@ -131,6 +171,11 @@ extern "C"
 
 		return open_real(filename, 0, 0);
 	}
+*/
+
+//------------------------
+// fopen INTERCEPT
+//------------------------
 	/*
 	   Check if file is in SAF area and call Java to get FD if so
 	*/
@@ -186,7 +231,6 @@ extern "C"
 
 //------------------------
 // fclose INTERCEPT
-// Just used for debug, always use real fclose, even for SAF files
 //------------------------
 	int fclose(FILE * file)
 	{
@@ -202,6 +246,9 @@ extern "C"
 		return fclose_real(file);
 	}
 
+//------------------------
+// close INTERCEPT
+//------------------------
 	int close(int fd)
 	{
 		LOGI("close %d", fd);
@@ -251,7 +298,7 @@ extern "C"
 	*/
 
 //------------------------
-// opendir INTERCEPT
+// stat INTERCEPT
 //------------------------
 	int stat(const char *path, struct stat *statbuf)
 	{
@@ -285,10 +332,17 @@ extern "C"
 			if(stat_real == NULL)
 				stat_real = (int(*)(const char *path, struct stat * statbuf))loadRealFunc("stat");
 
+			if(cacheInvalidPaths)
+			{
+				if(checkPathExistsCache(path) == false)
+					return -1; // Parent does not exist, so file must not exist
+			}
+
 			return stat_real(path, statbuf);
 		}
 
 	}
+
 //------------------------
 // access INTERCEPT
 //------------------------
@@ -342,7 +396,6 @@ extern "C"
 
 		if(inSAF)
 		{
-
 			std::vector<std::string> items = FIleJNI_opendir(fullFilename.c_str());
 
 			if(items.size() > 0)
