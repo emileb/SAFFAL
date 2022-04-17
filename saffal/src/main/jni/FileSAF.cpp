@@ -452,7 +452,7 @@ extern "C"
 }
 
 //------------------------
-// opendir INTERCEPT
+// readdir INTERCEPT
 //------------------------
 struct dirent *readdir(DIR *dirp)
 {
@@ -510,5 +510,81 @@ int closedir(DIR *dirp)
 
 		return closedir_real(dirp);
 	}
+}
+
+int scandir(const char * dirp,
+			struct dirent *** namelist,
+			int (*filter)(const struct dirent *),
+			int (*compar)(const struct dirent **, const struct dirent **))
+{
+	LOGI("scandir %s", dirp);
+
+	std::string fullFilename = getCanonicalPath(dirp);
+
+	bool inSAF = isInSAF(fullFilename);
+
+	if(inSAF)
+	{
+		// Use opendir to find the files. opendir should actually return a DIR_SAF as we are in SAF
+		DIR_SAF * dirSAF = (DIR_SAF *)opendir(fullFilename.c_str());
+
+		if(dirSAF)
+		{
+		    int numberFiles = 0;
+
+			if(dirSAF->items.size() > 0)
+			{
+				// Create pointer to list of all possible files (before filtering)
+                *namelist = (dirent **)malloc(sizeof(dirent*) * dirSAF->items.size());
+
+                // Use this to make code easier to read
+				dirent **namelistPrt = *namelist;
+
+                // Scan all files found my opendir and filter as necessary
+                for(int n = 0; n < dirSAF->items.size(); n++)
+				{
+                   	// Get the dirent from our list
+					const struct dirent *ent = &dirSAF->items.at(n);
+
+                    // Check if filtering is needed
+                    if(filter == NULL || filter(ent) != 0)
+                    {
+                        // Create the dirent
+                        namelistPrt[numberFiles] = (dirent *) malloc(sizeof(dirent));
+
+                        //Copy info we have to the dirent, NOTE not everything is implemented here
+                        strcpy(namelistPrt[numberFiles]->d_name, ent->d_name);
+                        namelistPrt[numberFiles]->d_type = ent->d_type;
+
+                        numberFiles++;
+                    }
+				}
+			}
+
+			closedir((DIR*)dirSAF);
+
+			return numberFiles;
+		}
+		else
+		{
+			return 0;
+		}
+	}
+	else
+	{
+		static int(*scandir_real)(const char * ,
+								  struct dirent *** ,
+								  int (*)(const struct dirent *),
+								  int (*)(const struct dirent **, const struct dirent **)) = NULL;
+
+		if(scandir_real == NULL)
+			scandir_real = (int(*)(const char * ,
+								   struct dirent *** ,
+								   int (*)(const struct dirent *),
+								   int (*)(const struct dirent **, const struct dirent **)))loadRealFunc("scandir");
+
+		return scandir_real(dirp, namelist, filter, compar);
+	}
+
 }
 #endif
