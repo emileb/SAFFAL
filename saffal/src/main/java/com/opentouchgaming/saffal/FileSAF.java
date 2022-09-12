@@ -210,7 +210,11 @@ public class FileSAF extends File{
         InputStream is = null;
         if(isRealFile)
         {
-
+            try {
+                is = new FileInputStream(this);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
         else
         {
@@ -337,7 +341,7 @@ public class FileSAF extends File{
             documentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, documentPath);
 
             if (documentNode != null) {
-                DBG("FileSAF (" + fullPath + ") found Document: " + documentNode.documentId);
+                //DBG("FileSAF (" + fullPath + ") found Document: " + documentNode.documentId);
                 isDirectory = documentNode.isDirectory;
             }
         }
