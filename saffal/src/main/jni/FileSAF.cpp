@@ -263,6 +263,23 @@ extern "C"
 		return close_real(fd);
 	}
 
+	// Only intercept mkdir to clear the invalid cache for when the app creates a new dir
+	int mkdir(const char *path, mode_t mode)
+	{
+		// Clear the invalid path cache so we can read files in newly created folder
+		if(cacheInvalidPaths)
+		{
+			invalidPaths.clear();
+		}
+
+		static int (*mkdir_real)(const char *path, mode_t mode) = NULL;
+
+		if(mkdir_real == NULL)
+			mkdir_real = (int(*)(const char *path, mode_t mode))loadRealFunc("mkdir");
+
+		return mkdir_real(path, mode);
+	}
+
 	/*  TODO
 	//------------------------
 	// mkdir INTERCEPT
