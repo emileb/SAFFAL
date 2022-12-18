@@ -71,7 +71,7 @@ public class FileJNI {
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public static String[] opendir(String path) {
 
-        Log.d(TAG, "opendir path = " + path);
+        //Log.d(TAG, "opendir path = " + path);
 
         FileSAF fileSAF = new FileSAF(path);
 
