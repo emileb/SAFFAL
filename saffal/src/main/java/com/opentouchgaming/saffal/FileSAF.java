@@ -9,8 +9,10 @@ import androidx.annotation.RequiresApi;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 
 public class FileSAF extends File{
@@ -158,7 +160,7 @@ public class FileSAF extends File{
             updateDocumentNode(true);
             if (documentNode == null) {
 
-                // Get teh path of the parent
+                // Get the path of the parent
                 String parentPath = UtilsSAF.getDocumentPath(getParent());
                 DocumentNode parentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, parentPath);
 
@@ -204,6 +206,24 @@ public class FileSAF extends File{
         return false;
     }
 
+    @Override
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public boolean isFile()
+    {
+        if(isRealFile)
+            return super.isFile();
+        else
+        {
+            updateDocumentNode(false);
+            if (documentNode != null)
+            {
+                return !documentNode.isDirectory;
+            }
+            else
+                return false;
+        }
+    }
+
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public InputStream getInputStream()
     {
@@ -232,6 +252,33 @@ public class FileSAF extends File{
         return is;
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public OutputStream getOutputStream()
+    {
+        OutputStream os = null;
+        if(isRealFile)
+        {
+            try {
+                os = new FileOutputStream(this);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        else
+        {
+            updateDocumentNode(true);
+
+            if (documentNode != null) {
+                try {
+                    os = documentNode.getOutputStream();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        return os;
+    }
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public int getFd(boolean write, boolean detach) {
 

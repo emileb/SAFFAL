@@ -10,6 +10,7 @@ import androidx.annotation.RequiresApi;
 
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,7 +35,6 @@ public class DocumentNode
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public DocumentNode findChild(String name)
     {
-
         DocumentNode node = null;
 
         findChildren();
@@ -180,6 +180,13 @@ public class DocumentNode
         return UtilsSAF.getContentResolver().openInputStream(myUri);
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public OutputStream getOutputStream() throws FileNotFoundException
+    {
+        Uri myUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
+
+        return UtilsSAF.getContentResolver().openOutputStream(myUri);
+    }
     /**
      * Traverse a tree to find a particular DocumentNode (file or directory). Path must look like:  folder1/folder2/file, or folder1/folder2/folder3
      *
