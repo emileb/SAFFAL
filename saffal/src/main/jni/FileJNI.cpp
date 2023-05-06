@@ -97,6 +97,7 @@ extern "C" void JNICALL Java_com_opentouchgaming_saffal_FileJNI_init(JNIEnv* env
 {
 	const char * SAFPathC = (const char *)(env)->GetStringUTFChars(SAFPath, 0);
 	cacheInvalidPaths = cacheNativeFs;
+	LOGI("SAF: Cache invalid paths = %d", cacheInvalidPaths);
 
 	// Save the SAF path so we can check against it in C code
 	setSAFPath(SAFPathC);

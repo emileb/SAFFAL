@@ -12,10 +12,14 @@
 #include <pthread.h>
 
 #include <android/log.h>
+
+static const int MAXIMUM_CACHED_FILES = 1024 * 2;
+
+#if 0
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileCache NDK", __VA_ARGS__))
-
+#else
 #define LOGI(...)
-
+#endif
 
 static pthread_mutex_t lock;
 
@@ -89,6 +93,8 @@ int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(co
 	return fd;
 }
 
+extern "C" void* loadRealFunc(const char * name); // In FileSAF.cpp
+
 static void closeFd(int fd)
 {
 	MUTEX_LOCK
@@ -102,9 +108,29 @@ static void closeFd(int fd)
 		LOGI("FileCache_closeFile FOUND  %s", cacheActive[fd].c_str());
 
 #if 1
-		// If we havn't already got a cached of this file, add it now
+		// If we haven't already got a cached of this file, add it now
 		if(cacheFree.find(cacheActive[fd]) == cacheFree.end())
 		{
+            // Free a file when over the cached limit
+            if(cacheFree.size() > MAXIMUM_CACHED_FILES)
+            {
+                // NOTE: This essentially take a random file from the cache, what ever happens to be sorted to the front.
+                // Better method would be to have them sorted in last used in another list
+                std::pair<std::string, int> firstEntry = *cacheFree.begin();
+                LOGI("FileCache_closeFile Removing from cache: %s, fd = %d", firstEntry.first.c_str(), firstEntry.second);
+                
+                static int (*close_real)(int) = NULL;
+
+                if(close_real == NULL)
+                    close_real = (int(*)(int))loadRealFunc("close");
+
+                // Close the fd
+                close_real(firstEntry.second);
+
+                // Remove
+                cacheFree.erase(firstEntry.first);
+            }
+
 			// Make a copy of the FD so the one held in FILE can be close
 			int fdCopy = dup(fd);
 

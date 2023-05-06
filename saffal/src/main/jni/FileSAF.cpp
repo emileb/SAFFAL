@@ -17,6 +17,7 @@
 #include <set>
 
 #include <android/log.h>
+
 #if 0
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileSAF NDK", __VA_ARGS__))
 #else
@@ -34,7 +35,7 @@ extern "C"
 {
 
 // Get the real OS function
-	static void* loadRealFunc(const char * name)
+	void* loadRealFunc(const char * name)
 	{
 		static void * libc = NULL;
 
