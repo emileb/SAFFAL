@@ -107,7 +107,7 @@ public class DocumentNode
                         newNode.modifiedDate = cursor.getLong(3);
                         newNode.size = cursor.getLong(4);
 
-                        DBG("Found " + newNode.name + " size = " + newNode.size);
+                        // DBG("Found " + newNode.name + " size = " + newNode.size);
 
                         children.add(newNode);
                     }

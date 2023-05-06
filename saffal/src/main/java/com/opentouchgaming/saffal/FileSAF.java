@@ -344,7 +344,7 @@ public class FileSAF extends File{
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public FileSAF[] listFiles() {
 
-        DBG("listFiles: path = " + getPath());
+        //DBG("listFiles: path = " + getPath());
 
         if(isRealFile) {
             ArrayList<FileSAF> files = new ArrayList<>();
