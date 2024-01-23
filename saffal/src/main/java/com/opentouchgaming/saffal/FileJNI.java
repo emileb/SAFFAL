@@ -5,6 +5,8 @@ import android.util.Log;
 
 import androidx.annotation.RequiresApi;
 
+import java.io.IOException;
+
 public class FileJNI {
     final static String TAG = "FileJNI JAVA";
 
@@ -14,6 +16,8 @@ public class FileJNI {
     public static int fopen(final String filePath, final String mode) {
         // Log.d(TAG, "fopen file = " + filePath);
 
+        boolean write = mode.contains("w") ||  mode.contains("a");
+
         FileSAF fileSAF = new FileSAF(filePath);
 
         // If not in the SAF area return -1
@@ -21,7 +25,20 @@ public class FileJNI {
             return -1;
         }
 
-        int fd = fileSAF.getFd(mode.contains("w"), true);
+        // Try to create if it does not exist
+        if(write && !fileSAF.exists())
+        {
+            try
+            {
+                fileSAF.createNewFile();
+            }
+            catch (IOException e)
+            {
+               return -1;
+            }
+        }
+
+        int fd = fileSAF.getFd(write, true);
         //Log.d(TAG, "fd = " + fd);
 
         return fd;
@@ -34,12 +51,16 @@ public class FileJNI {
 
         FileSAF fileSAF = new FileSAF(path);
 
-        // If not in the SAF area return -1 so the NDK code knows this
-        if (!UtilsSAF.isInSAFRoot(fileSAF.getPath())) {
+        //If the path we are trying to make is already at the start of the SAF root then return success
+        if(UtilsSAF.isRootOfSAFRoot(fileSAF.getPath()))
+        {
+            return 0;
+        }// If not in the SAF area return -1 so the NDK code knows this
+        else if (!UtilsSAF.isInSAFRoot(fileSAF.getPath())) {
             return -1;
         }
 
-        if (fileSAF.mkdir() == true) // Success
+        if (fileSAF.mkdirs() == true) // Success
         {
             return 0;
         } else // Failed
@@ -55,6 +76,21 @@ public class FileJNI {
         FileSAF fileSAF = new FileSAF(path);
 
         if (fileSAF.exists()) {
+            return 1;
+        }
+        else
+        {
+            return 0;
+        }
+    }
+
+    public static int delete(String path) {
+
+        Log.d(TAG, "delete path = " + path);
+
+        FileSAF fileSAF = new FileSAF(path);
+
+        if (fileSAF.delete()) {
             return 1;
         }
         else

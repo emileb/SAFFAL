@@ -45,48 +45,48 @@ int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(co
 {
 	MUTEX_LOCK
 
-//	pid_t tid = gettid();
-//	LOGI("tid = %d", tid);
-
 	int fd = 0;
 
 	static char fileTag[256]; // Need to include the filename AND the mode, can not mix modes
 	snprintf(fileTag, 256, "%s - %s", filename, mode);
 
-	//LOGI("FileCache_getFd %s, %s", filename, mode);
+	// Check if writing, if so DO NOT CACHE, also do not cache in user_files
+    if(strchr(mode,'w') || strchr(mode,'a') || strstr(filename, "user_files"))
+    {
+        fd = openFunc(filename, mode);
+    }
+    else
+    {
+        // Check if file is in our cache
+        if (cacheFree.find(fileTag) == cacheFree.end())      // not found
+        {
+            //LOGI("FileCache_getFd NOT FOUND");
+            fd = openFunc(filename, mode);
 
-	// Check if file is in our cache
-	if(cacheFree.find(fileTag) == cacheFree.end())      // not found
-	{
-		//LOGI("FileCache_getFd NOT FOUND");
-		fd = openFunc(filename, mode);
+            if (fd > 0)
+            {
+                LOGI("FileCache_getFd %s(%s) NOT FOUND, new fd = %d", filename, mode, fd);
+            }
+        }
+        else  // found
+        {
+            // Get cached fd
+            fd = cacheFree[fileTag];
 
-		if(fd > 0)
-		{
-			LOGI("FileCache_getFd %s(%s) NOT FOUND, new fd = %d", filename, mode, fd);
-		}
-	}
-	else  // found
-	{
-		// Get cached fd
-		fd = cacheFree[fileTag];
+            //Remove from free cache
+            cacheFree.erase(fileTag);
 
-		//Remove from free cache
-		cacheFree.erase(fileTag);
+            LOGI("FileCache_getFd %s(%s) FOUND, fd = %d", filename, mode, fd);
 
-		LOGI("FileCache_getFd %s(%s) FOUND, fd = %d", filename, mode, fd);
+            // Reset the fd position
+            lseek(fd, 0, SEEK_SET);
+        }
 
-		// Reset the fd position
-		lseek(fd, 0, SEEK_SET);
-	}
-
-	//LOGI("FileCache_getFd fd = %d", fd);
-
-	// FD should always be unique, so map works
-	if(fd > 0)
-	{
-		cacheActive[fd] = fileTag;
-	}
+        // FD should always be unique, so map works
+        if (fd > 0) {
+            cacheActive[fd] = fileTag;
+        }
+    }
 
 	MUTEX_UNLOCK
 

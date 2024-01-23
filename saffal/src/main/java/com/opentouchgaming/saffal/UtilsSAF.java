@@ -9,19 +9,21 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
-import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
-import androidx.documentfile.provider.DocumentFile;
 import android.system.Os;
 import android.text.TextUtils;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
+import androidx.documentfile.provider.DocumentFile;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 
-public class UtilsSAF {
+public class UtilsSAF
+{
     static String TAG = "UtilsSAF";
 
     static Context context;
@@ -43,12 +45,14 @@ public class UtilsSAF {
         Holds the URI returned from ACTION_OPEN_DOCUMENT_TREE (important!)
         Also the File system 'root' this should point to E.G could be '/storage/emulated/0' for internal files
      */
-    public static class TreeRoot {
+    public static class TreeRoot
+    {
         public Uri uri;
         public String rootPath;
         public String rootDocumentId;
 
-        public TreeRoot(Uri uri, String rootPath, String rootDocumentId) {
+        public TreeRoot(Uri uri, String rootPath, String rootDocumentId)
+        {
             this.uri = uri;
             this.rootPath = rootPath;
             this.rootDocumentId = rootDocumentId;
@@ -60,9 +64,10 @@ public class UtilsSAF {
      *
      * @param ctx the Context.
      */
-    public static void setContext(@NonNull Context ctx, boolean cacheNativeFs) {
+    public static void setContext(@NonNull Context ctx, boolean cacheNativeFs)
+    {
         UtilsSAF.context = ctx;
-        UtilsSAF.cacheNativeFs = cacheNativeFs ? 1: 0;
+        UtilsSAF.cacheNativeFs = cacheNativeFs ? 1 : 0;
         // Load C library
         System.loadLibrary("saffal");
     }
@@ -72,7 +77,8 @@ public class UtilsSAF {
      *
      * @param treeRoot the uri and root path.
      */
-    public static void setTreeRoot(@NonNull TreeRoot treeRoot) {
+    public static void setTreeRoot(@NonNull TreeRoot treeRoot)
+    {
 
         UtilsSAF.treeRoot = treeRoot;
 
@@ -90,7 +96,8 @@ public class UtilsSAF {
      *
      * @return treeRoot;
      */
-    public static TreeRoot getTreeRoot() {
+    public static TreeRoot getTreeRoot()
+    {
         return treeRoot;
     }
 
@@ -99,7 +106,8 @@ public class UtilsSAF {
      *
      * @return ContentResolver
      */
-    public static ContentResolver getContentResolver() {
+    public static ContentResolver getContentResolver()
+    {
         return context.getContentResolver();
     }
 
@@ -109,13 +117,13 @@ public class UtilsSAF {
      * @param activity Your Activity
      * @param code     Code return on onActivityResult
      */
-    public static void openDocumentTree(@NonNull Activity activity, int code) {
+    public static void openDocumentTree(@NonNull Activity activity, int code)
+    {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        intent.addFlags(
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                        | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
-                        | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
+                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION |
+                        Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
 
         activity.startActivityForResult(intent, code);
     }
@@ -125,8 +133,10 @@ public class UtilsSAF {
      *
      * @param ctx A Context
      */
-    public static void saveTreeRoot(Context ctx) {
-        if (treeRoot != null && treeRoot.uri != null && treeRoot.rootPath != null && treeRoot.rootDocumentId != null) {
+    public static void saveTreeRoot(Context ctx)
+    {
+        if (treeRoot != null && treeRoot.uri != null && treeRoot.rootPath != null && treeRoot.rootDocumentId != null)
+        {
             SharedPreferences prefs = ctx.getSharedPreferences("utilsSAF", 0);
             SharedPreferences.Editor prefsEdit = prefs.edit();
             prefsEdit.putString("uri", treeRoot.uri.toString());
@@ -134,7 +144,8 @@ public class UtilsSAF {
             prefsEdit.putString("rootDocumentId", treeRoot.rootDocumentId);
             prefsEdit.commit();
         }
-        else {
+        else
+        {
             DBG("saveTreeRoot: ERROR, treeRoot not complete");
         }
     }
@@ -144,22 +155,28 @@ public class UtilsSAF {
      *
      * @param ctx A Context
      */
-    public static boolean loadTreeRoot(Context ctx) {
-        try {
+    public static boolean loadTreeRoot(Context ctx)
+    {
+        try
+        {
             SharedPreferences prefs = ctx.getSharedPreferences("utilsSAF", 0);
 
             String url = prefs.getString("uri", null);
-            if (url != null) {
+            if (url != null)
+            {
                 Uri treeUri = null;
                 treeUri = Uri.parse(url);
                 String rootPath = prefs.getString("rootPath", null);
                 String rootDocumentId = prefs.getString("rootDocumentId", null);
-                if (rootPath != null && rootDocumentId != null) {
+                if (rootPath != null && rootDocumentId != null)
+                {
                     setTreeRoot(new TreeRoot(treeUri, rootPath, rootDocumentId));
                     return true;
                 }
             }
-        } catch (IllegalArgumentException e) {
+        }
+        catch (IllegalArgumentException e)
+        {
             e.printStackTrace();
         }
         return false;
@@ -170,7 +187,8 @@ public class UtilsSAF {
      *
      * @return True if ready
      */
-    public static boolean ready() {
+    public static boolean ready()
+    {
         if (treeRoot != null && treeRoot.uri != null && treeRoot.rootPath != null && treeRoot.rootDocumentId != null && context != null)
             return true;
         else
@@ -182,43 +200,79 @@ public class UtilsSAF {
      *
      * @return True if in SAF space
      */
-    public static boolean isInSAFRoot(String path) {
-        if(ready())
+    public static boolean isInSAFRoot(String path)
+    {
+        if (ready())
             return path.startsWith(treeRoot.rootPath);
         else
             return false;
     }
 
+    /**
+     * Returns true if the path is at the start of the SAF root
+     *
+     * @return True if in SAF space
+     */
+    public static boolean isRootOfSAFRoot(String path)
+    {
+        if (ready())
+        {
+            String[] inputPathParts = path.split("/");
+            String[] startStringParts = treeRoot.rootPath.split("/");
+            if (inputPathParts.length > startStringParts.length)
+            {
+                return false;
+            }
+            for (int i = 0; i < inputPathParts.length; i++)
+            {
+                if (!inputPathParts[i].equals(startStringParts[i]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
     // Found at: https://stackoverflow.com/questions/30546441/android-open-file-with-intent-chooser-from-uri-obtained-by-storage-access-frame
-    public static String getFdPath(int fd) {
+    public static String getFdPath(int fd)
+    {
 
         //if(true)
         //    return "/proc/self/fd/" + fd;
 
         final String resolved;
 
-        try {
+        try
+        {
             final File procfsFdFile = new File("/proc/self/fd/" + fd);
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP)
+            {
                 // Returned name may be empty or "pipe:", "socket:", "(deleted)" etc.
                 resolved = Os.readlink(procfsFdFile.getAbsolutePath());
-            } else {
+            }
+            else
+            {
                 // Returned name is usually valid or empty, but may start from
                 // funny prefix if the file does not have a name
                 resolved = procfsFdFile.getCanonicalPath();
             }
 
-            if (TextUtils.isEmpty(resolved) || resolved.charAt(0) != '/'
-                    || resolved.startsWith("/proc/") || resolved.startsWith("/fd/"))
+            if (TextUtils.isEmpty(resolved) || resolved.charAt(0) != '/' || resolved.startsWith("/proc/") || resolved.startsWith("/fd/"))
                 return null;
-        } catch (IOException ioe) {
+        }
+        catch (IOException ioe)
+        {
             // This exception means, that given file DID have some name, but it is
             // too long, some of symlinks in the path were broken or, most
             // likely, one of it's directories is inaccessible for reading.
             // Either way, it is almost certainly not a pipe.
             return "";
-        } catch (Exception errnoe) {
+        }
+        catch (Exception errnoe)
+        {
             // Actually ErrnoException, but base type avoids VerifyError on old versions
             // This exception should be VERY rare and means, that the descriptor
             // was made unavailable by some Unix magic.
@@ -229,7 +283,8 @@ public class UtilsSAF {
     }
 
 
-   // public static ArrayList<FileSAF> fileskeep = new ArrayList<>();
+    // public static ArrayList<FileSAF> fileskeep = new ArrayList<>();
+
     /**
      * Returns a REAL File, even for files in SAF! NOTE, the file name and path of the file in SAF may be incorrect
      *
@@ -240,11 +295,11 @@ public class UtilsSAF {
     {
         DBG("getRealFile: " + path);
         File file = null;
-        if( ready() && isInSAFRoot(path) )
+        if (ready() && isInSAFRoot(path))
         {
             FileSAF fileSAF = new FileSAF(path);
-           // fileskeep.add(fileSAF);
-            if(fileSAF.exists())
+            // fileskeep.add(fileSAF);
+            if (fileSAF.exists())
             {
                 file = fileSAF.getRealFile(path);
             }
@@ -257,36 +312,51 @@ public class UtilsSAF {
         return file;
     }
 
-    static InputStream getInputStream(DocumentFile docFile) throws FileNotFoundException {
+    static InputStream getInputStream(DocumentFile docFile) throws FileNotFoundException
+    {
         return context.getContentResolver().openInputStream(docFile.getUri());
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    static ParcelFileDescriptor getParcelDescriptor(String documentId, boolean write) throws IOException {
+    static ParcelFileDescriptor getParcelDescriptor(String documentId, boolean write) throws IOException
+    {
         //DBG("getFd read = " + docFile.canRead() + " write = " + docFile.canWrite() + " name = " + docFile.getName());
         Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
 
-        ParcelFileDescriptor filePfd = context.getContentResolver().openFileDescriptor(childrenUri, write ? "rw" : "r");
+        // NOTE! If we are writing we ALWAYS truncate the file (rwt), this means append won't work, will fix if needed
+        ParcelFileDescriptor filePfd = context.getContentResolver().openFileDescriptor(childrenUri, write ? "rwt" : "r");
 
         return filePfd;
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    static boolean deleteDocument(String documentId) throws IOException
+    {
+        Uri uri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
 
-    public static String getDocumentPath(String fullPath) {
-        if (!fullPath.startsWith(treeRoot.rootPath)) {
+       return DocumentsContract.deleteDocument(context.getContentResolver(), uri);
+    }
+
+    public static String getDocumentPath(String fullPath)
+    {
+        if (!fullPath.startsWith(treeRoot.rootPath))
+        {
             DBG("getDocumentPath: ERROR, filePath (" + fullPath + ") must start with the rootPath (" + treeRoot.rootPath + ")");
             return null;
         }
 
-        if (fullPath.length() > treeRoot.rootPath.length()) {
+        if (fullPath.length() > treeRoot.rootPath.length())
+        {
             return fullPath.substring(treeRoot.rootPath.length() + 1); // Remove the first "/"
-        } else {
+        }
+        else
+        {
             return "";
         }
     }
 
-    public static String[] getParts(String fullPath) {
-
+    public static String[] getParts(String fullPath)
+    {
         String childPath = getDocumentPath(fullPath);
 
         if (childPath.contentEquals(""))
@@ -297,7 +367,8 @@ public class UtilsSAF {
     }
 
 
-    private static void DBG(String str) {
+    private static void DBG(String str)
+    {
         Log.d(TAG, str);
     }
 }

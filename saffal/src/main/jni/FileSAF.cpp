@@ -80,7 +80,7 @@ extern "C"
 		std::string parentString = parent;
 		if(parentString.length() > 2) // Check valid path
 		{
-			LOGI("parent = %s", parentString.c_str());
+			// LOGI("parent = %s", parentString.c_str());
 			// See if we have already checked the parent path
 			if(invalidPaths.find(parentString) == invalidPaths.end())
 			{
@@ -135,8 +135,19 @@ extern "C"
 
 		if(inSAF)
 		{
+            const char *mode = "r";
+
+            #define O_RDONLY        00
+            #define O_WRONLY        01
+            #define O_RDWR          02
+
+            // Dark places uses raw open to write to files, check here
+            // NOTE 'append' mode will not work, it will always truncate!
+            if(oflag & (O_WRONLY | O_RDWR))
+                mode = "w";
+
 			// fd = -1, not in SAF area, fd = 0, failed to open. Otherwise valid file
-			int fd = FileCache_getFd(fullFilename.c_str(), "r", FileJNI_fopen);
+			int fd = FileCache_getFd(fullFilename.c_str(), mode, FileJNI_fopen);
 
 			if(fd > 0)
 				return fd;
@@ -202,7 +213,6 @@ extern "C"
 
 		if(inSAF)
 		{
-			// fd = -1 failed to open. Otherwise valid file
 			int fd = FileCache_getFd(fullFilename.c_str(), mode, FileJNI_fopen);
 
 			LOGI("fopen: file = %s, mode = %s, fd = %d", fullFilename.c_str(), mode, fd);
@@ -263,7 +273,7 @@ extern "C"
 
 		return close_real(fd);
 	}
-
+/*
 	// Only intercept mkdir to clear the invalid cache for when the app creates a new dir
 	int mkdir(const char *path, mode_t mode)
 	{
@@ -280,47 +290,52 @@ extern "C"
 
 		return mkdir_real(path, mode);
 	}
-
-	/*  TODO
+    */
 	//------------------------
 	// mkdir INTERCEPT
 	//------------------------
-		int mkdir(const char *path, mode_t mode)
-		{
-			// Remove relative paths (../ etc)
-			std::string fullPath = getCanonicalPath(path);
+    int mkdir(const char *path, mode_t mode)
+    {
+        // Clear the invalid path cache so we can read files in newly created folder
+        if(cacheInvalidPaths)
+        {
+            invalidPaths.clear();
+        }
 
-			LOGI("mkdir %s, %d. fullPath %s", path, mode, fullPath.c_str());
+        // Remove relative paths (../ etc)
+        std::string fullPath = getCanonicalPath(path);
 
-			// status = -1, not in SAF area, status = 0 is OK, status = 1 failed
-			int status = FileJNI_mkdir(fullPath.c_str());
+        LOGI("mkdir %s, %d. fullPath %s", path, mode, fullPath.c_str());
 
-			if(status == 0)
-			{
-				return 0; // OK
-			}
-			else if(status == 1)
-			{
-				return -1; // Failed
-			}
-			else // Not in SAF, use real function
-			{
-				static int (*mkdir_real)(const char *path, mode_t mode) = NULL;
+        // status = -1, not in SAF area, status = 0 is OK, status = 1 failed
+        int status = FileJNI_mkdir(fullPath.c_str());
 
-				if(mkdir_real == NULL)
-					mkdir_real = (int(*)(const char *path, mode_t mode))loadRealFunc("mkdir");
+        if(status == 0)
+        {
+            return 0; // OK
+        }
+        else if(status == 1)
+        {
+            return -1; // Failed
+        }
+        else // Not in SAF, use real function
+        {
+            static int (*mkdir_real)(const char *path, mode_t mode) = NULL;
 
-				return mkdir_real(path, mode);
-			}
-		}
-	*/
+            if(mkdir_real == NULL)
+                mkdir_real = (int(*)(const char *path, mode_t mode))loadRealFunc("mkdir");
+
+            return mkdir_real(path, mode);
+        }
+    }
+
 
 //------------------------
 // stat INTERCEPT
 //------------------------
 	int stat(const char *path, struct stat *statbuf)
 	{
-		LOGI("stat %s", path);
+		//LOGI("stat %s", path);
 
 		std::string fullFilename = getCanonicalPath(path);
 
@@ -360,6 +375,33 @@ extern "C"
 		}
 
 	}
+
+//------------------------
+// remove INTERCEPT
+//------------------------
+    int remove(const char *path)
+    {
+        LOGI("remove %s", path);
+
+        std::string fullFilename = getCanonicalPath(path);
+
+        bool inSAF = isInSAF(fullFilename);
+
+        if(inSAF)
+        {
+            return FileJNI_delete(path);
+        }
+        else
+        {
+            static int(*remove_real)(const char *path) = NULL;
+
+            if(remove_real == NULL)
+                remove_real = (int(*)(const char *path))loadRealFunc("remove");
+
+            return remove_real(path);
+        }
+    }
+
 
 //------------------------
 // access INTERCEPT

@@ -185,9 +185,10 @@ public class FileSAF extends File{
         if(isRealFile)
             return super.mkdirs();
         else {
-            updateDocumentNode(true);
-            if (documentNode == null) {
 
+            updateDocumentNode(true);
+
+            if (documentNode == null) {
                 String documentPath = UtilsSAF.getDocumentPath(fullPath);
 
                 try {
@@ -201,6 +202,10 @@ public class FileSAF extends File{
                     isDirectory = documentNode.isDirectory;
                     return true;
                 }
+            }
+            else // Already exists
+            {
+                return true;
             }
         }
         return false;
@@ -344,8 +349,6 @@ public class FileSAF extends File{
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public FileSAF[] listFiles() {
 
-        //DBG("listFiles: path = " + getPath());
-
         if(isRealFile) {
             ArrayList<FileSAF> files = new ArrayList<>();
             File[] realFiles = super.listFiles();
@@ -376,6 +379,37 @@ public class FileSAF extends File{
                 }
             }
             return files.toArray(new FileSAF[files.size()]);
+        }
+    }
+
+    @Override
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public boolean delete()
+    {
+        if(isRealFile)
+        {
+            return super.delete();
+        }
+        else
+        {
+            // Get the path of the parent
+            String parentPath = UtilsSAF.getDocumentPath(getParent());
+            DocumentNode parentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, parentPath);
+
+            if (parentNode != null && parentNode.isDirectory) {
+                String filename = getName();
+                try
+                {
+                    return parentNode.deleteChild(filename);
+                }
+                catch (FileNotFoundException e)
+                {
+                    e.printStackTrace();
+                }
+
+                return true;
+            }
+            return false;
         }
     }
 

@@ -173,6 +173,35 @@ public class DocumentNode
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public boolean deleteChild(String name) throws FileNotFoundException
+    {
+        DBG("DocumentNode: deleteChild: " + name);
+
+        if (isDirectory)
+        {
+            DocumentNode child = findChild(name);
+            if (child == null)
+            {
+                DBG("DocumentNode: deleteChild ERROR, file " + name + " does not exists");
+            }
+            else
+            {
+                Uri myUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, child.documentId);
+
+                // clear cache
+                children = null;
+
+                return DocumentsContract.deleteDocument(UtilsSAF.getContentResolver(), myUri);
+            }
+        }
+        else
+        {
+            DBG("DocumentNode: deleteChild ERROR, tried to delete child in non-directory");
+        }
+        return false;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public InputStream getInputStream() throws FileNotFoundException
     {
         Uri myUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);

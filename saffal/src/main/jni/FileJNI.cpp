@@ -67,6 +67,7 @@ static jmethodID fclose_method;
 static jmethodID mkdir_method;
 static jmethodID exists_method;
 static jmethodID opendir_method;
+static jmethodID delete_method;
 
 
 extern "C" __attribute__((visibility("default"))) jint JNI_OnLoad(JavaVM* vm, void* reserved)
@@ -85,6 +86,7 @@ extern "C" __attribute__((visibility("default"))) jint JNI_OnLoad(JavaVM* vm, vo
 	//fclose_method = (env)->GetStaticMethodID(FileJNI_cls, "fclose", "(I)I");
 	mkdir_method = (env)->GetStaticMethodID(FileJNI_cls, "mkdir", "(Ljava/lang/String;)I");
 	exists_method = (env)->GetStaticMethodID(FileJNI_cls, "exists", "(Ljava/lang/String;)I");
+	delete_method = (env)->GetStaticMethodID(FileJNI_cls, "delete", "(Ljava/lang/String;)I");
 	opendir_method = (env)->GetStaticMethodID(FileJNI_cls, "opendir", "(Ljava/lang/String;)[Ljava/lang/String;");
 
 	FileCache_init();
@@ -171,6 +173,25 @@ int FileJNI_exists(const char * path)
 
 	// Call Java function
 	int ret = (env)->CallStaticIntMethod(FileJNI_cls, exists_method, pathStr);
+
+	(env)->DeleteLocalRef(pathStr);
+
+	MUTEX_UNLOCK
+
+	return ret;
+}
+
+int FileJNI_delete(const char * path)
+{
+	MUTEX_LOCK
+
+	JNIEnv *env = NULL;
+	bool attached = getEnv(&env);
+
+	jstring pathStr = (env)->NewStringUTF(path);
+
+	// Call Java function
+	int ret = (env)->CallStaticIntMethod(FileJNI_cls, delete_method, pathStr);
 
 	(env)->DeleteLocalRef(pathStr);
 
