@@ -65,6 +65,12 @@ public class FileSAF extends File{
 
     @Override
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public FileSAF getParentFile() {
+        return new FileSAF(getParent());
+    }
+
+    @Override
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public boolean isDirectory() {
         if(isRealFile)
             return super.isDirectory();
