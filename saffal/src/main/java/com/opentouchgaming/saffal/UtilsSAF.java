@@ -41,24 +41,6 @@ public class UtilsSAF
     // The root node of the selected SAF folder
     static DocumentNode documentRoot;
 
-    /*
-        Holds the URI returned from ACTION_OPEN_DOCUMENT_TREE (important!)
-        Also the File system 'root' this should point to E.G could be '/storage/emulated/0' for internal files
-     */
-    public static class TreeRoot
-    {
-        public Uri uri;
-        public String rootPath;
-        public String rootDocumentId;
-
-        public TreeRoot(Uri uri, String rootPath, String rootDocumentId)
-        {
-            this.uri = uri;
-            this.rootPath = rootPath;
-            this.rootDocumentId = rootDocumentId;
-        }
-    }
-
     /**
      * Set a Context so all operations don't need to pass in a new one
      *
@@ -70,6 +52,16 @@ public class UtilsSAF
         UtilsSAF.cacheNativeFs = cacheNativeFs ? 1 : 0;
         // Load C library
         System.loadLibrary("saffal");
+    }
+
+    /**
+     * Get the current tree root
+     *
+     * @return treeRoot;
+     */
+    public static TreeRoot getTreeRoot()
+    {
+        return treeRoot;
     }
 
     /**
@@ -89,16 +81,6 @@ public class UtilsSAF
 
         // Update the C library with the root path
         FileJNI.init(treeRoot.rootPath, cacheNativeFs);
-    }
-
-    /**
-     * Get the current tree root
-     *
-     * @return treeRoot;
-     */
-    public static TreeRoot getTreeRoot()
-    {
-        return treeRoot;
     }
 
     /**
@@ -189,10 +171,7 @@ public class UtilsSAF
      */
     public static boolean ready()
     {
-        if (treeRoot != null && treeRoot.uri != null && treeRoot.rootPath != null && treeRoot.rootDocumentId != null && context != null)
-            return true;
-        else
-            return false;
+        return treeRoot != null && treeRoot.uri != null && treeRoot.rootPath != null && treeRoot.rootDocumentId != null && context != null;
     }
 
     /**
@@ -282,9 +261,6 @@ public class UtilsSAF
         return resolved;
     }
 
-
-    // public static ArrayList<FileSAF> fileskeep = new ArrayList<>();
-
     /**
      * Returns a REAL File, even for files in SAF! NOTE, the file name and path of the file in SAF may be incorrect
      *
@@ -312,6 +288,9 @@ public class UtilsSAF
         return file;
     }
 
+
+    // public static ArrayList<FileSAF> fileskeep = new ArrayList<>();
+
     static InputStream getInputStream(DocumentFile docFile) throws FileNotFoundException
     {
         return context.getContentResolver().openInputStream(docFile.getUri());
@@ -334,7 +313,7 @@ public class UtilsSAF
     {
         Uri uri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
 
-       return DocumentsContract.deleteDocument(context.getContentResolver(), uri);
+        return DocumentsContract.deleteDocument(context.getContentResolver(), uri);
     }
 
     public static String getDocumentPath(String fullPath)
@@ -366,9 +345,26 @@ public class UtilsSAF
 
     }
 
-
     private static void DBG(String str)
     {
         Log.d(TAG, str);
+    }
+
+    /*
+        Holds the URI returned from ACTION_OPEN_DOCUMENT_TREE (important!)
+        Also the File system 'root' this should point to E.G could be '/storage/emulated/0' for internal files
+     */
+    public static class TreeRoot
+    {
+        public Uri uri;
+        public String rootPath;
+        public String rootDocumentId;
+
+        public TreeRoot(Uri uri, String rootPath, String rootDocumentId)
+        {
+            this.uri = uri;
+            this.rootPath = rootPath;
+            this.rootDocumentId = rootDocumentId;
+        }
     }
 }

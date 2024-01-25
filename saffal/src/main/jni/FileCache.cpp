@@ -51,42 +51,43 @@ int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(co
 	snprintf(fileTag, 256, "%s - %s", filename, mode);
 
 	// Check if writing, if so DO NOT CACHE, also do not cache in user_files
-    if(strchr(mode,'w') || strchr(mode,'a') || strstr(filename, "user_files"))
-    {
-        fd = openFunc(filename, mode);
-    }
-    else
-    {
-        // Check if file is in our cache
-        if (cacheFree.find(fileTag) == cacheFree.end())      // not found
-        {
-            //LOGI("FileCache_getFd NOT FOUND");
-            fd = openFunc(filename, mode);
+	if(strchr(mode, 'w') || strchr(mode, 'a') || strstr(filename, "user_files"))
+	{
+		fd = openFunc(filename, mode);
+	}
+	else
+	{
+		// Check if file is in our cache
+		if(cacheFree.find(fileTag) == cacheFree.end())       // not found
+		{
+			//LOGI("FileCache_getFd NOT FOUND");
+			fd = openFunc(filename, mode);
 
-            if (fd > 0)
-            {
-                LOGI("FileCache_getFd %s(%s) NOT FOUND, new fd = %d", filename, mode, fd);
-            }
-        }
-        else  // found
-        {
-            // Get cached fd
-            fd = cacheFree[fileTag];
+			if(fd > 0)
+			{
+				LOGI("FileCache_getFd %s(%s) NOT FOUND, new fd = %d", filename, mode, fd);
+			}
+		}
+		else  // found
+		{
+			// Get cached fd
+			fd = cacheFree[fileTag];
 
-            //Remove from free cache
-            cacheFree.erase(fileTag);
+			//Remove from free cache
+			cacheFree.erase(fileTag);
 
-            LOGI("FileCache_getFd %s(%s) FOUND, fd = %d", filename, mode, fd);
+			LOGI("FileCache_getFd %s(%s) FOUND, fd = %d", filename, mode, fd);
 
-            // Reset the fd position
-            lseek(fd, 0, SEEK_SET);
-        }
+			// Reset the fd position
+			lseek(fd, 0, SEEK_SET);
+		}
 
-        // FD should always be unique, so map works
-        if (fd > 0) {
-            cacheActive[fd] = fileTag;
-        }
-    }
+		// FD should always be unique, so map works
+		if(fd > 0)
+		{
+			cacheActive[fd] = fileTag;
+		}
+	}
 
 	MUTEX_UNLOCK
 
@@ -108,28 +109,29 @@ static void closeFd(int fd)
 		LOGI("FileCache_closeFile FOUND  %s", cacheActive[fd].c_str());
 
 #if 1
+
 		// If we haven't already got a cached of this file, add it now
 		if(cacheFree.find(cacheActive[fd]) == cacheFree.end())
 		{
-            // Free a file when over the cached limit
-            if(cacheFree.size() > MAXIMUM_CACHED_FILES)
-            {
-                // NOTE: This essentially take a random file from the cache, what ever happens to be sorted to the front.
-                // Better method would be to have them sorted in last used in another list
-                std::pair<std::string, int> firstEntry = *cacheFree.begin();
-                LOGI("FileCache_closeFile Removing from cache: %s, fd = %d", firstEntry.first.c_str(), firstEntry.second);
-                
-                static int (*close_real)(int) = NULL;
+			// Free a file when over the cached limit
+			if(cacheFree.size() > MAXIMUM_CACHED_FILES)
+			{
+				// NOTE: This essentially take a random file from the cache, what ever happens to be sorted to the front.
+				// Better method would be to have them sorted in last used in another list
+				std::pair<std::string, int> firstEntry = *cacheFree.begin();
+				LOGI("FileCache_closeFile Removing from cache: %s, fd = %d", firstEntry.first.c_str(), firstEntry.second);
 
-                if(close_real == NULL)
-                    close_real = (int(*)(int))loadRealFunc("close");
+				static int (*close_real)(int) = NULL;
 
-                // Close the fd
-                close_real(firstEntry.second);
+				if(close_real == NULL)
+					close_real = (int(*)(int))loadRealFunc("close");
 
-                // Remove
-                cacheFree.erase(firstEntry.first);
-            }
+				// Close the fd
+				close_real(firstEntry.second);
+
+				// Remove
+				cacheFree.erase(firstEntry.first);
+			}
 
 			// Make a copy of the FD so the one held in FILE can be close
 			int fdCopy = dup(fd);
@@ -139,6 +141,7 @@ static void closeFd(int fd)
 
 			cacheFree[cacheActive[fd]] = fdCopy;
 		}
+
 #endif
 		// Remove the old fd from the current active cache
 		cacheActive.erase(fd);

@@ -78,6 +78,7 @@ extern "C"
 		bool exists = false;
 		const char *parent = dirname(path);
 		std::string parentString = parent;
+
 		if(parentString.length() > 2) // Check valid path
 		{
 			// LOGI("parent = %s", parentString.c_str());
@@ -86,10 +87,12 @@ extern "C"
 			{
 				// Get real 'stat' function
 				static int(*stat_real)(const char *path, struct stat * statbuf) = NULL;
+
 				if(stat_real == NULL)
 					stat_real = (int(*)(const char *path, struct stat * statbuf))loadRealFunc("stat");
 
 				struct stat st;
+
 				if(!stat_real(parentString.c_str(), &st)) // Return 0 for exists
 				{
 					// DOES exist
@@ -107,6 +110,7 @@ extern "C"
 			else
 			{
 				int parentExists = invalidPaths[parentString];
+
 				if(parentExists)
 					exists = true;
 			}
@@ -135,16 +139,16 @@ extern "C"
 
 		if(inSAF)
 		{
-            const char *mode = "r";
+			const char *mode = "r";
 
-            #define O_RDONLY        00
-            #define O_WRONLY        01
-            #define O_RDWR          02
+#define O_RDONLY        00
+#define O_WRONLY        01
+#define O_RDWR          02
 
-            // Dark places uses raw open to write to files, check here
-            // NOTE 'append' mode will not work, it will always truncate!
-            if(oflag & (O_WRONLY | O_RDWR))
-                mode = "w";
+			// Dark places uses raw open to write to files, check here
+			// NOTE 'append' mode will not work, it will always truncate!
+			if(oflag & (O_WRONLY | O_RDWR))
+				mode = "w";
 
 			// fd = -1, not in SAF area, fd = 0, failed to open. Otherwise valid file
 			int fd = FileCache_getFd(fullFilename.c_str(), mode, FileJNI_fopen);
@@ -173,17 +177,17 @@ extern "C"
 		return open(path, oflag, modes);
 	}
 
-/*
-	static int fopenGetFd(const char * filename, const char * mode)
-	{
-		static int(*open_real)(const char *path, int oflag, mode_t modes) = NULL;
+	/*
+		static int fopenGetFd(const char * filename, const char * mode)
+		{
+			static int(*open_real)(const char *path, int oflag, mode_t modes) = NULL;
 
-		if(open_real == NULL)
-			open_real = (int(*)(const char *path, int oflag, mode_t modes))loadRealFunc("open");
+			if(open_real == NULL)
+				open_real = (int(*)(const char *path, int oflag, mode_t modes))loadRealFunc("open");
 
-		return open_real(filename, 0, 0);
-	}
-*/
+			return open_real(filename, 0, 0);
+		}
+	*/
 
 //------------------------
 // fopen INTERCEPT
@@ -273,8 +277,27 @@ extern "C"
 
 		return close_real(fd);
 	}
-/*
-	// Only intercept mkdir to clear the invalid cache for when the app creates a new dir
+	/*
+		// Only intercept mkdir to clear the invalid cache for when the app creates a new dir
+		int mkdir(const char *path, mode_t mode)
+		{
+			// Clear the invalid path cache so we can read files in newly created folder
+			if(cacheInvalidPaths)
+			{
+				invalidPaths.clear();
+			}
+
+			static int (*mkdir_real)(const char *path, mode_t mode) = NULL;
+
+			if(mkdir_real == NULL)
+				mkdir_real = (int(*)(const char *path, mode_t mode))loadRealFunc("mkdir");
+
+			return mkdir_real(path, mode);
+		}
+	    */
+	//------------------------
+	// mkdir INTERCEPT
+	//------------------------
 	int mkdir(const char *path, mode_t mode)
 	{
 		// Clear the invalid path cache so we can read files in newly created folder
@@ -283,51 +306,32 @@ extern "C"
 			invalidPaths.clear();
 		}
 
-		static int (*mkdir_real)(const char *path, mode_t mode) = NULL;
+		// Remove relative paths (../ etc)
+		std::string fullPath = getCanonicalPath(path);
 
-		if(mkdir_real == NULL)
-			mkdir_real = (int(*)(const char *path, mode_t mode))loadRealFunc("mkdir");
+		LOGI("mkdir %s, %d. fullPath %s", path, mode, fullPath.c_str());
 
-		return mkdir_real(path, mode);
+		// status = -1, not in SAF area, status = 0 is OK, status = 1 failed
+		int status = FileJNI_mkdir(fullPath.c_str());
+
+		if(status == 0)
+		{
+			return 0; // OK
+		}
+		else if(status == 1)
+		{
+			return -1; // Failed
+		}
+		else // Not in SAF, use real function
+		{
+			static int (*mkdir_real)(const char *path, mode_t mode) = NULL;
+
+			if(mkdir_real == NULL)
+				mkdir_real = (int(*)(const char *path, mode_t mode))loadRealFunc("mkdir");
+
+			return mkdir_real(path, mode);
+		}
 	}
-    */
-	//------------------------
-	// mkdir INTERCEPT
-	//------------------------
-    int mkdir(const char *path, mode_t mode)
-    {
-        // Clear the invalid path cache so we can read files in newly created folder
-        if(cacheInvalidPaths)
-        {
-            invalidPaths.clear();
-        }
-
-        // Remove relative paths (../ etc)
-        std::string fullPath = getCanonicalPath(path);
-
-        LOGI("mkdir %s, %d. fullPath %s", path, mode, fullPath.c_str());
-
-        // status = -1, not in SAF area, status = 0 is OK, status = 1 failed
-        int status = FileJNI_mkdir(fullPath.c_str());
-
-        if(status == 0)
-        {
-            return 0; // OK
-        }
-        else if(status == 1)
-        {
-            return -1; // Failed
-        }
-        else // Not in SAF, use real function
-        {
-            static int (*mkdir_real)(const char *path, mode_t mode) = NULL;
-
-            if(mkdir_real == NULL)
-                mkdir_real = (int(*)(const char *path, mode_t mode))loadRealFunc("mkdir");
-
-            return mkdir_real(path, mode);
-        }
-    }
 
 
 //------------------------
@@ -379,28 +383,28 @@ extern "C"
 //------------------------
 // remove INTERCEPT
 //------------------------
-    int remove(const char *path)
-    {
-        LOGI("remove %s", path);
+	int remove(const char *path)
+	{
+		LOGI("remove %s", path);
 
-        std::string fullFilename = getCanonicalPath(path);
+		std::string fullFilename = getCanonicalPath(path);
 
-        bool inSAF = isInSAF(fullFilename);
+		bool inSAF = isInSAF(fullFilename);
 
-        if(inSAF)
-        {
-            return FileJNI_delete(path);
-        }
-        else
-        {
-            static int(*remove_real)(const char *path) = NULL;
+		if(inSAF)
+		{
+			return FileJNI_delete(path);
+		}
+		else
+		{
+			static int(*remove_real)(const char *path) = NULL;
 
-            if(remove_real == NULL)
-                remove_real = (int(*)(const char *path))loadRealFunc("remove");
+			if(remove_real == NULL)
+				remove_real = (int(*)(const char *path))loadRealFunc("remove");
 
-            return remove_real(path);
-        }
-    }
+			return remove_real(path);
+		}
+	}
 
 
 //------------------------
@@ -573,9 +577,9 @@ int closedir(DIR *dirp)
 }
 
 int scandir(const char * dirp,
-			struct dirent *** namelist,
-			int (*filter)(const struct dirent *),
-			int (*compar)(const struct dirent **, const struct dirent **))
+            struct dirent *** namelist,
+            int (*filter)(const struct dirent *),
+            int (*compar)(const struct dirent **, const struct dirent **))
 {
 	LOGI("scandir %s", dirp);
 
@@ -590,34 +594,34 @@ int scandir(const char * dirp,
 
 		if(dirSAF)
 		{
-		    int numberFiles = 0;
+			int numberFiles = 0;
 
 			if(dirSAF->items.size() > 0)
 			{
 				// Create pointer to list of all possible files (before filtering)
-                *namelist = (dirent **)malloc(sizeof(dirent*) * dirSAF->items.size());
+				*namelist = (dirent **)malloc(sizeof(dirent*) * dirSAF->items.size());
 
-                // Use this to make code easier to read
+				// Use this to make code easier to read
 				dirent **namelistPrt = *namelist;
 
-                // Scan all files found my opendir and filter as necessary
-                for(int n = 0; n < dirSAF->items.size(); n++)
+				// Scan all files found my opendir and filter as necessary
+				for(int n = 0; n < dirSAF->items.size(); n++)
 				{
-                   	// Get the dirent from our list
+					// Get the dirent from our list
 					const struct dirent *ent = &dirSAF->items.at(n);
 
-                    // Check if filtering is needed
-                    if(filter == NULL || filter(ent) != 0)
-                    {
-                        // Create the dirent
-                        namelistPrt[numberFiles] = (dirent *) malloc(sizeof(dirent));
+					// Check if filtering is needed
+					if(filter == NULL || filter(ent) != 0)
+					{
+						// Create the dirent
+						namelistPrt[numberFiles] = (dirent *) malloc(sizeof(dirent));
 
-                        //Copy info we have to the dirent, NOTE not everything is implemented here
-                        strcpy(namelistPrt[numberFiles]->d_name, ent->d_name);
-                        namelistPrt[numberFiles]->d_type = ent->d_type;
+						//Copy info we have to the dirent, NOTE not everything is implemented here
+						strcpy(namelistPrt[numberFiles]->d_name, ent->d_name);
+						namelistPrt[numberFiles]->d_type = ent->d_type;
 
-                        numberFiles++;
-                    }
+						numberFiles++;
+					}
 				}
 			}
 
@@ -632,16 +636,16 @@ int scandir(const char * dirp,
 	}
 	else
 	{
-		static int(*scandir_real)(const char * ,
-								  struct dirent *** ,
-								  int (*)(const struct dirent *),
-								  int (*)(const struct dirent **, const struct dirent **)) = NULL;
+		static int(*scandir_real)(const char *,
+		                          struct dirent ***,
+		                          int (*)(const struct dirent *),
+		                          int (*)(const struct dirent **, const struct dirent **)) = NULL;
 
 		if(scandir_real == NULL)
-			scandir_real = (int(*)(const char * ,
-								   struct dirent *** ,
-								   int (*)(const struct dirent *),
-								   int (*)(const struct dirent **, const struct dirent **)))loadRealFunc("scandir");
+			scandir_real = (int(*)(const char *,
+			                       struct dirent ***,
+			                       int (*)(const struct dirent *),
+			                       int (*)(const struct dirent **, const struct dirent **)))loadRealFunc("scandir");
 
 		return scandir_real(dirp, namelist, filter, compar);
 	}

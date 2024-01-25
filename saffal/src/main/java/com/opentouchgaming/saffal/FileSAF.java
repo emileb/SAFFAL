@@ -15,7 +15,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 
-public class FileSAF extends File{
+public class FileSAF extends File
+{
     final String TAG = "FileSAF";
 
     // Full path
@@ -33,23 +34,29 @@ public class FileSAF extends File{
     // FD if getFd called
     int fd;
 
-    public FileSAF(String path, String name) {
+    public FileSAF(String path, String name)
+    {
         this(path + "/" + name);
     }
 
-    public FileSAF(FileSAF path, String name) {
+    public FileSAF(FileSAF path, String name)
+    {
         this(path.getPath() + "/" + name);
     }
 
-    public FileSAF(String path) {
+    public FileSAF(String path)
+    {
 
         super(path);
 
         isRealFile = !UtilsSAF.isInSAFRoot(path);
 
-        try {
+        try
+        {
             this.fullPath = new File(path).getCanonicalPath();
-        } catch (IOException e) {
+        }
+        catch (IOException e)
+        {
             e.printStackTrace();
         }
     }
@@ -59,22 +66,26 @@ public class FileSAF extends File{
         return isRealFile;
     }
 
-    public String getPath() {
+    public String getPath()
+    {
         return fullPath;
     }
 
     @Override
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public FileSAF getParentFile() {
+    public FileSAF getParentFile()
+    {
         return new FileSAF(getParent());
     }
 
     @Override
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public boolean isDirectory() {
-        if(isRealFile)
+    public boolean isDirectory()
+    {
+        if (isRealFile)
             return super.isDirectory();
-        else {
+        else
+        {
             updateDocumentNode(false);
             return isDirectory;
         }
@@ -82,27 +93,27 @@ public class FileSAF extends File{
 
     @Override
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public boolean canWrite() {
-        if(isRealFile)
+    public boolean canWrite()
+    {
+        if (isRealFile)
             return super.canWrite();
-        else {
+        else
+        {
             updateDocumentNode(true);
-            if (documentNode != null) {
-                // Presume we can always write to SAF area
-                return true;
-            }
-            return false;
+            // Presume we can always write to SAF area
+            return documentNode != null;
         }
     }
 
     @Override
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public boolean exists() {
-        if(isRealFile)
+    public boolean exists()
+    {
+        if (isRealFile)
         {
             boolean exists = super.exists();
 
-            if(!exists)
+            if (!exists)
             {
                 // Try to open it to test it exists also, sometimes the exists() function does not work?!
                 try
@@ -110,33 +121,36 @@ public class FileSAF extends File{
                     FileInputStream o = new FileInputStream(this);
                     o.close();
                     exists = true;
-                } catch (FileNotFoundException e)
+                }
+                catch (FileNotFoundException e)
                 {
                     //e.printStackTrace();
-                } catch (IOException e)
+                }
+                catch (IOException e)
                 {
                     //e.printStackTrace();
                 }
             }
             return exists;
         }
-        else {
+        else
+        {
             updateDocumentNode(true);
-            if (documentNode != null) {
-                return true;
-            }
-            return false;
+            return documentNode != null;
         }
     }
 
     @Override
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public long length() {
-        if(isRealFile)
+    public long length()
+    {
+        if (isRealFile)
             return super.length();
-        else {
+        else
+        {
             updateDocumentNode(false);
-            if (documentNode != null) {
+            if (documentNode != null)
+            {
                 return documentNode.size;
             }
             return 0;
@@ -145,12 +159,15 @@ public class FileSAF extends File{
 
     @Override
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public long lastModified() {
-        if(isRealFile)
+    public long lastModified()
+    {
+        if (isRealFile)
             return super.lastModified();
-        else {
+        else
+        {
             updateDocumentNode(false);
-            if (documentNode != null) {
+            if (documentNode != null)
+            {
                 return documentNode.modifiedDate;
             }
             return 0;
@@ -159,20 +176,24 @@ public class FileSAF extends File{
 
     @Override
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public boolean createNewFile() throws IOException {
-        if(isRealFile)
+    public boolean createNewFile() throws IOException
+    {
+        if (isRealFile)
             return super.createNewFile();
-        else {
+        else
+        {
             updateDocumentNode(true);
-            if (documentNode == null) {
+            if (documentNode == null)
+            {
 
                 // Get the path of the parent
                 String parentPath = UtilsSAF.getDocumentPath(getParent());
                 DocumentNode parentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, parentPath);
 
-                if (parentNode != null && parentNode.isDirectory) {
+                if (parentNode != null && parentNode.isDirectory)
+                {
                     String filename = getName();
-                    parentNode.createChild(false,filename);
+                    parentNode.createChild(false, filename);
                     return true;
                 }
                 else
@@ -188,22 +209,28 @@ public class FileSAF extends File{
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public boolean mkdirs()
     {
-        if(isRealFile)
+        if (isRealFile)
             return super.mkdirs();
-        else {
+        else
+        {
 
             updateDocumentNode(true);
 
-            if (documentNode == null) {
+            if (documentNode == null)
+            {
                 String documentPath = UtilsSAF.getDocumentPath(fullPath);
 
-                try {
+                try
+                {
                     documentNode = DocumentNode.createAllNodes(UtilsSAF.documentRoot, documentPath);
-                } catch (FileNotFoundException e) {
+                }
+                catch (FileNotFoundException e)
+                {
                     e.printStackTrace();
                 }
 
-                if (documentNode != null) {
+                if (documentNode != null)
+                {
                     DBG("FileSAF (" + fullPath + ") created folders: DocumentId = " + documentNode.documentId);
                     isDirectory = documentNode.isDirectory;
                     return true;
@@ -221,7 +248,7 @@ public class FileSAF extends File{
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public boolean isFile()
     {
-        if(isRealFile)
+        if (isRealFile)
             return super.isFile();
         else
         {
@@ -239,11 +266,14 @@ public class FileSAF extends File{
     public InputStream getInputStream()
     {
         InputStream is = null;
-        if(isRealFile)
+        if (isRealFile)
         {
-            try {
+            try
+            {
                 is = new FileInputStream(this);
-            } catch (IOException e) {
+            }
+            catch (IOException e)
+            {
                 e.printStackTrace();
             }
         }
@@ -251,10 +281,14 @@ public class FileSAF extends File{
         {
             updateDocumentNode(true);
 
-            if (documentNode != null) {
-                try {
+            if (documentNode != null)
+            {
+                try
+                {
                     is = documentNode.getInputStream();
-                } catch (IOException e) {
+                }
+                catch (IOException e)
+                {
                     e.printStackTrace();
                 }
             }
@@ -267,11 +301,14 @@ public class FileSAF extends File{
     public OutputStream getOutputStream()
     {
         OutputStream os = null;
-        if(isRealFile)
+        if (isRealFile)
         {
-            try {
+            try
+            {
                 os = new FileOutputStream(this);
-            } catch (IOException e) {
+            }
+            catch (IOException e)
+            {
                 e.printStackTrace();
             }
         }
@@ -279,10 +316,14 @@ public class FileSAF extends File{
         {
             updateDocumentNode(true);
 
-            if (documentNode != null) {
-                try {
+            if (documentNode != null)
+            {
+                try
+                {
                     os = documentNode.getOutputStream();
-                } catch (IOException e) {
+                }
+                catch (IOException e)
+                {
                     e.printStackTrace();
                 }
             }
@@ -290,20 +331,26 @@ public class FileSAF extends File{
 
         return os;
     }
+
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public int getFd(boolean write, boolean detach) {
+    public int getFd(boolean write, boolean detach)
+    {
 
         updateDocumentNode(true);
 
-        if (documentNode != null) {
-            try {
+        if (documentNode != null)
+        {
+            try
+            {
                 parcelFileDescriptor = UtilsSAF.getParcelDescriptor(documentNode.documentId, write);
                 if (detach)
                     fd = parcelFileDescriptor.detachFd();
                 else
                     fd = parcelFileDescriptor.getFd();
                 return fd;
-            } catch (IOException e) {
+            }
+            catch (IOException e)
+            {
                 e.printStackTrace();
             }
         }
@@ -311,23 +358,23 @@ public class FileSAF extends File{
     }
 
 
-
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public File getRealFile(String path)
     {
         File file = null;
 
-        if(exists())
+        if (exists())
         {
-            int fd = getFd(false,true);
+            int fd = getFd(false, true);
 
             String linkFileName = UtilsSAF.getFdPath(fd);
 
-            if(linkFileName != null  && linkFileName.length() > 0) {
+            if (linkFileName != null && linkFileName.length() > 0)
+            {
                 file = new File(linkFileName);
             }
 
-            DBG("getRealFile: Real File = " + linkFileName );
+            DBG("getRealFile: Real File = " + linkFileName);
         }
 
         return file;
@@ -335,8 +382,9 @@ public class FileSAF extends File{
 
     @Override
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public String[] list() {
-        if(isRealFile)
+    public String[] list()
+    {
+        if (isRealFile)
         {
             return super.list();
         }
@@ -344,7 +392,8 @@ public class FileSAF extends File{
         {
             ArrayList<String> strRet = new ArrayList<>();
             FileSAF[] files = listFiles();
-            for (FileSAF file : files) {
+            for (FileSAF file : files)
+            {
                 strRet.add(file.getName());
             }
             return strRet.toArray(new String[files.length]);
@@ -353,32 +402,38 @@ public class FileSAF extends File{
 
     @Override
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public FileSAF[] listFiles() {
+    public FileSAF[] listFiles()
+    {
 
-        if(isRealFile) {
+        if (isRealFile)
+        {
             ArrayList<FileSAF> files = new ArrayList<>();
             File[] realFiles = super.listFiles();
-            if(realFiles!=null)
+            if (realFiles != null)
             {
-                for(File f: realFiles)
+                for (File f : realFiles)
                 {
                     files.add(new FileSAF(f.getAbsolutePath()));
                 }
             }
             return files.toArray(new FileSAF[files.size()]);
         }
-        else {
+        else
+        {
             updateDocumentNode(true);
 
             ArrayList<FileSAF> files = new ArrayList<>();
 
-            if (documentNode != null) {
-                if (documentNode.isDirectory) {
+            if (documentNode != null)
+            {
+                if (documentNode.isDirectory)
+                {
                     {
                         ArrayList<DocumentNode> nodes = documentNode.getChildren();
 
                         // For each valid document, create a new FileSAF and return
-                        for (DocumentNode node : nodes) {
+                        for (DocumentNode node : nodes)
+                        {
                             files.add(new FileSAF(fullPath + "/" + node.name));
                         }
                     }
@@ -392,7 +447,7 @@ public class FileSAF extends File{
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public boolean delete()
     {
-        if(isRealFile)
+        if (isRealFile)
         {
             return super.delete();
         }
@@ -402,7 +457,8 @@ public class FileSAF extends File{
             String parentPath = UtilsSAF.getDocumentPath(getParent());
             DocumentNode parentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, parentPath);
 
-            if (parentNode != null && parentNode.isDirectory) {
+            if (parentNode != null && parentNode.isDirectory)
+            {
                 String filename = getName();
                 try
                 {
@@ -420,21 +476,25 @@ public class FileSAF extends File{
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    private void updateDocumentNode(boolean forceUpdate) {
-        if(documentNode == null || forceUpdate) {
+    private void updateDocumentNode(boolean forceUpdate)
+    {
+        if (documentNode == null || forceUpdate)
+        {
 
             String documentPath = UtilsSAF.getDocumentPath(fullPath);
 
             documentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, documentPath);
 
-            if (documentNode != null) {
+            if (documentNode != null)
+            {
                 //DBG("FileSAF (" + fullPath + ") found Document: " + documentNode.documentId);
                 isDirectory = documentNode.isDirectory;
             }
         }
     }
 
-    private void DBG(String str) {
+    private void DBG(String str)
+    {
         Log.d(TAG, str);
     }
 }

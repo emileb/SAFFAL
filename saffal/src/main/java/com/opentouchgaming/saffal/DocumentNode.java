@@ -17,11 +17,8 @@ import java.util.List;
 public class DocumentNode
 {
 
-    static String TAG = "DocumentNode";
-
     static final String mimeType = "plain";
-
-
+    static String TAG = "DocumentNode";
     public String name;
     public String documentId;
     public boolean exists;
@@ -31,6 +28,95 @@ public class DocumentNode
     public DocumentNode parent;
 
     private List<DocumentNode> children;
+
+    /**
+     * Traverse a tree to find a particular DocumentNode (file or directory). Path must look like:  folder1/folder2/file, or folder1/folder2/folder3
+     *
+     * @return The node if it exists, otherwise null;
+     */
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public static DocumentNode findDocumentNode(DocumentNode rootNode, String documentPath)
+    {
+        DocumentNode node = null;
+
+        if (documentPath != null)
+        {
+            // Split path into parts
+            String[] parts = documentPath.split("\\/", -1);
+
+            node = rootNode;
+
+            for (String part : parts)
+            {
+                if (part.length() > 0)
+                { // part will be an empty string if documentPath was an empty string
+
+                    if (node == null)
+                        break;
+
+                    node = node.findChild(part);
+                }
+            }
+        }
+
+        return node;
+    }
+
+    /**
+     * Create all the directories in documentPath up to the end (like mkdirs)
+     *
+     * @return The node if it exists or has been created, otherwise null;
+     */
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public static DocumentNode createAllNodes(DocumentNode rootNode, String documentPath) throws FileNotFoundException
+    {
+        DBG("DocumentNode: createAllNodes: " + documentPath);
+
+        DocumentNode node = null;
+
+        if (documentPath != null)
+        {
+            // Split path into parts
+            String[] parts = documentPath.split("\\/", -1);
+
+            node = rootNode;
+
+            for (String part : parts)
+            {
+                if (part.length() > 0)
+                { // part will be an empty string if documentPath was an empty string
+                    DBG("DocumentNode: createAllNodes: Checking part: " + part);
+                    if (node != null && node.isDirectory)
+                    {
+                        DocumentNode next = node.findChild(part);
+                        // Check if directory already exists
+                        if (next == null)
+                        {
+                            // Try to create the next level of folder
+                            node = node.createChild(true, part);
+                        }
+                        else
+                        {
+                            node = next;
+                        }
+                    }
+                    else
+                    {
+                        DBG("DocumentNode: createAllNodes: Error, DocumentNode is not a directory");
+                        node = null;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return node;
+    }
+
+    private static void DBG(String str)
+    {
+        Log.d(TAG, str);
+    }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public DocumentNode findChild(String name)
@@ -93,8 +179,10 @@ public class DocumentNode
                 Cursor cursor = null;
                 try
                 {
-                    cursor = UtilsSAF.getContentResolver().query(childrenUri, new String[]{DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE,
-                            DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_LAST_MODIFIED, DocumentsContract.Document.COLUMN_SIZE}, null, null, null);
+                    cursor = UtilsSAF.getContentResolver().query(childrenUri,
+                            new String[]{DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE,
+                                    DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                                    DocumentsContract.Document.COLUMN_SIZE}, null, null, null);
 
                     while (cursor.moveToNext())
                     {
@@ -111,18 +199,21 @@ public class DocumentNode
 
                         children.add(newNode);
                     }
-                } catch (Exception ignored)
+                }
+                catch (Exception ignored)
                 {
-                    DBG("findChildren: Some Exception: " + ignored.toString());
-                } finally
+                    DBG("findChildren: Some Exception: " + ignored);
+                }
+                finally
                 {
                     try
                     {
                         if (cursor != null)
                             cursor.close();
-                    } catch (Exception ignored)
+                    }
+                    catch (Exception ignored)
                     {
-                        DBG("findChildren: Some Exception: " + ignored.toString());
+                        DBG("findChildren: Some Exception: " + ignored);
                     }
                 }
             }
@@ -215,94 +306,5 @@ public class DocumentNode
         Uri myUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
 
         return UtilsSAF.getContentResolver().openOutputStream(myUri);
-    }
-    /**
-     * Traverse a tree to find a particular DocumentNode (file or directory). Path must look like:  folder1/folder2/file, or folder1/folder2/folder3
-     *
-     * @return The node if it exists, otherwise null;
-     */
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public static DocumentNode findDocumentNode(DocumentNode rootNode, String documentPath)
-    {
-        DocumentNode node = null;
-
-        if (documentPath != null)
-        {
-            // Split path into parts
-            String[] parts = documentPath.split("\\/", -1);
-
-            node = rootNode;
-
-            for (String part : parts)
-            {
-                if (part.length() > 0)
-                { // part will be an empty string if documentPath was an empty string
-
-                    if (node == null)
-                        break;
-
-                    node = node.findChild(part);
-                }
-            }
-        }
-
-        return node;
-    }
-
-
-    /**
-     * Create all the directories in documentPath up to the end (like mkdirs)
-     *
-     * @return The node if it exists or has been created, otherwise null;
-     */
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public static DocumentNode createAllNodes(DocumentNode rootNode, String documentPath) throws FileNotFoundException
-    {
-        DBG("DocumentNode: createAllNodes: " + documentPath);
-
-        DocumentNode node = null;
-
-        if (documentPath != null)
-        {
-            // Split path into parts
-            String[] parts = documentPath.split("\\/", -1);
-
-            node = rootNode;
-
-            for (String part : parts)
-            {
-                if (part.length() > 0)
-                { // part will be an empty string if documentPath was an empty string
-                    DBG("DocumentNode: createAllNodes: Checking part: " + part);
-                    if (node != null && node.isDirectory)
-                    {
-                        DocumentNode next = node.findChild(part);
-                        // Check if directory already exists
-                        if (next == null)
-                        {
-                            // Try to create the next level of folder
-                            node = node.createChild(true, part);
-                        }
-                        else
-                        {
-                            node = next;
-                        }
-                    }
-                    else
-                    {
-                        DBG("DocumentNode: createAllNodes: Error, DocumentNode is not a directory");
-                        node = null;
-                        break;
-                    }
-                }
-            }
-        }
-
-        return node;
-    }
-
-    private static void DBG(String str)
-    {
-        Log.d(TAG, str);
     }
 }
