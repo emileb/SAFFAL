@@ -185,7 +185,6 @@ public class FileSAF extends File
             updateDocumentNode(true);
             if (documentNode == null)
             {
-
                 // Get the path of the parent
                 String parentPath = UtilsSAF.getDocumentPath(getParent());
                 DocumentNode parentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, parentPath);
@@ -263,19 +262,12 @@ public class FileSAF extends File
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public InputStream getInputStream()
+    public InputStream getInputStream() throws FileNotFoundException
     {
         InputStream is = null;
         if (isRealFile)
         {
-            try
-            {
-                is = new FileInputStream(this);
-            }
-            catch (IOException e)
-            {
-                e.printStackTrace();
-            }
+            is = new FileInputStream(this);
         }
         else
         {
@@ -283,14 +275,11 @@ public class FileSAF extends File
 
             if (documentNode != null)
             {
-                try
-                {
-                    is = documentNode.getInputStream();
-                }
-                catch (IOException e)
-                {
-                    e.printStackTrace();
-                }
+                is = documentNode.getInputStream();
+            }
+            else
+            {
+                throw new FileNotFoundException();
             }
         }
 
@@ -298,19 +287,12 @@ public class FileSAF extends File
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    public OutputStream getOutputStream()
+    public OutputStream getOutputStream() throws FileNotFoundException
     {
         OutputStream os = null;
         if (isRealFile)
         {
-            try
-            {
-                os = new FileOutputStream(this);
-            }
-            catch (IOException e)
-            {
-                e.printStackTrace();
-            }
+            os = new FileOutputStream(this);
         }
         else
         {
@@ -318,14 +300,7 @@ public class FileSAF extends File
 
             if (documentNode != null)
             {
-                try
-                {
-                    os = documentNode.getOutputStream();
-                }
-                catch (IOException e)
-                {
-                    e.printStackTrace();
-                }
+                os = documentNode.getOutputStream();
             }
         }
 
