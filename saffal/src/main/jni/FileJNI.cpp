@@ -68,7 +68,7 @@ static jmethodID mkdir_method;
 static jmethodID exists_method;
 static jmethodID opendir_method;
 static jmethodID delete_method;
-
+static jmethodID rename_method;
 
 extern "C" __attribute__((visibility("default"))) jint JNI_OnLoad(JavaVM* vm, void* reserved)
 {
@@ -88,6 +88,7 @@ extern "C" __attribute__((visibility("default"))) jint JNI_OnLoad(JavaVM* vm, vo
 	exists_method = (env)->GetStaticMethodID(FileJNI_cls, "exists", "(Ljava/lang/String;)I");
 	delete_method = (env)->GetStaticMethodID(FileJNI_cls, "delete", "(Ljava/lang/String;)I");
 	opendir_method = (env)->GetStaticMethodID(FileJNI_cls, "opendir", "(Ljava/lang/String;)[Ljava/lang/String;");
+	rename_method = (env)->GetStaticMethodID(FileJNI_cls, "rename", "(Ljava/lang/String;Ljava/lang/String;)I");
 
 	FileCache_init();
 
@@ -198,6 +199,27 @@ int FileJNI_delete(const char * path)
 	MUTEX_UNLOCK
 
 	return ret;
+}
+
+int FileJNI_rename(const char * oldFilename, const char * newFilename)
+{
+    MUTEX_LOCK
+
+    JNIEnv *env = NULL;
+    bool attached = getEnv(&env);
+
+    jstring oldStr = (env)->NewStringUTF(oldFilename);
+    jstring newStr = (env)->NewStringUTF(newFilename);
+
+    // Call Java function
+    int ret = (env)->CallStaticIntMethod(FileJNI_cls, rename_method, oldStr, newStr);
+
+    (env)->DeleteLocalRef(oldStr);
+    (env)->DeleteLocalRef(newStr);
+
+    MUTEX_UNLOCK
+
+    return ret;
 }
 
 std::vector<std::string> FIleJNI_opendir(const char * path)

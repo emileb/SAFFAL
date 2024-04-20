@@ -106,6 +106,36 @@ public class FileJNI
         }
     }
 
+    public static int rename(String oldFilename, String newFilename)
+    {
+        Log.d(TAG, "rename old = " + oldFilename + ", new = " + newFilename);
+        FileSAF oldFile = new FileSAF(oldFilename);
+        FileSAF newFile = new FileSAF(newFilename);
+
+        // This implementation had a limitation in that the file path can not change in the rename, can be fixed later if needed
+        String oldParent = oldFile.getParentFile().getPath();
+        String newParent = newFile.getParentFile().getPath();
+        if (oldParent.contentEquals(newParent))
+        {
+            // Attempt file rename
+            try
+            {
+                oldFile.rename(newFile.getName());
+                return 0;
+            }
+            catch (IOException e)
+            {
+                e.printStackTrace();
+                return -1;
+            }
+        }
+        else
+        {
+            Log.e(TAG, "Parent paths for rename do not match: " + oldParent + " -> " + newParent);
+            return -1;
+        }
+    }
+
     /**
      * Try to open the path in SAF and return a string array of the items in the directory
      *

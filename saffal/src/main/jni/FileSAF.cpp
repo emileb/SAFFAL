@@ -633,5 +633,31 @@ extern "C"
 			return scandir_real(dirp, namelist, filter, compar);
 		}
 	}
+
+
+	int rename(const char *old_filename, const char *new_filename)
+	{
+		LOGI("rename %s -> %s", old_filename, new_filename);
+
+		std::string fullFilenameOld = getCanonicalPath(old_filename);
+		std::string fullFilenameNew = getCanonicalPath(new_filename);
+
+		bool inSAFOld = isInSAF(fullFilenameOld);
+		bool inSAFNew = isInSAF(fullFilenameNew);
+
+		if(inSAFOld && inSAFNew)
+		{
+			return FileJNI_rename(old_filename, new_filename);
+		}
+		else
+		{
+			static int (*rename_real)(const char *old_filename, const char *new_filename) = NULL;
+
+			if(rename_real == NULL)
+				rename_real = (int (*)(const char *old_filename, const char *new_filename)) loadRealFunc("rename");
+
+			return rename_real(old_filename, new_filename);
+		}
+	}
 }
 #endif
