@@ -8,7 +8,6 @@
 #include <map>
 #include <string>
 #include <vector>
-
 #include <pthread.h>
 
 #include <android/log.h>
@@ -39,7 +38,6 @@ void FileCache_init()
 {
 	pthread_mutex_init(&lock, NULL);
 }
-#include <sys/types.h>
 
 int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(const char * filename, const char * mode))
 {
@@ -109,14 +107,13 @@ static void closeFd(int fd)
 		LOGI("FileCache_closeFile FOUND  %s", cacheActive[fd].c_str());
 
 #if 1
-
 		// If we haven't already got a cached of this file, add it now
 		if(cacheFree.find(cacheActive[fd]) == cacheFree.end())
 		{
 			// Free a file when over the cached limit
 			if(cacheFree.size() > MAXIMUM_CACHED_FILES)
 			{
-				// NOTE: This essentially take a random file from the cache, what ever happens to be sorted to the front.
+				// NOTE: This essentially take a random file from the cache, whatever happens to be sorted to the front.
 				// Better method would be to have them sorted in last used in another list
 				std::pair<std::string, int> firstEntry = *cacheFree.begin();
 				LOGI("FileCache_closeFile Removing from cache: %s, fd = %d", firstEntry.first.c_str(), firstEntry.second);

@@ -46,7 +46,6 @@ public class FileSAF extends File
 
     public FileSAF(String path)
     {
-
         super(path);
 
         isRealFile = !UtilsSAF.isInSAFRoot(path);
@@ -310,7 +309,6 @@ public class FileSAF extends File
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public int getFd(boolean write, boolean detach)
     {
-
         updateDocumentNode(true);
 
         if (documentNode != null)
@@ -451,11 +449,41 @@ public class FileSAF extends File
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public boolean rename(String newName) throws IOException
+    {
+        if (isRealFile)
+        {
+            return false;
+        }
+        else
+        {
+            updateDocumentNode(true);
+
+            if (documentNode != null)
+            {
+                // Renames the file
+                UtilsSAF.renameDocument(documentNode.documentId, newName);
+
+                // Get the parent node and clear its cache because it's its changed
+                String parentPath = UtilsSAF.getDocumentPath(getParent());
+                DocumentNode parentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, parentPath);
+
+                // Clear the cache, not very efficient as clears everything but fine for now
+                if (parentNode != null && parentNode.isDirectory)
+                {
+                   parentNode.clearCache();
+                }
+            }
+
+            return true;
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void updateDocumentNode(boolean forceUpdate)
     {
         if (documentNode == null || forceUpdate)
         {
-
             String documentPath = UtilsSAF.getDocumentPath(fullPath);
 
             documentNode = DocumentNode.findDocumentNode(UtilsSAF.documentRoot, documentPath);

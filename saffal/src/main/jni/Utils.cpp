@@ -119,7 +119,5 @@ bool isInSAF(std::string path)
 		isInSAF = true;
 	}
 
-	// LOGI("isInSAF: %s -> In SAF = %d", path.c_str(), isInSAF);
-
 	return isInSAF;
 }

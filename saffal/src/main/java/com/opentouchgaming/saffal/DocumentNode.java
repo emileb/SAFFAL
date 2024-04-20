@@ -16,7 +16,6 @@ import java.util.List;
 
 public class DocumentNode
 {
-
     static final String mimeType = "plain";
     static String TAG = "DocumentNode";
     public String name;
@@ -225,6 +224,12 @@ public class DocumentNode
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public synchronized void clearCache()
+    {
+        children = null;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public DocumentNode createChild(boolean directory, String name) throws FileNotFoundException
     {
         DBG("DocumentNode: createChild: " + name);
@@ -250,8 +255,9 @@ public class DocumentNode
                 {
                     throw new FileNotFoundException();
                 }
+
                 // We have created a new file, null the children cache so it's updated next time
-                children = null;
+                clearCache();
 
                 return findChild(name);
             }
@@ -280,7 +286,7 @@ public class DocumentNode
                 Uri myUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, child.documentId);
 
                 // clear cache
-                children = null;
+                clearCache();
 
                 return DocumentsContract.deleteDocument(UtilsSAF.getContentResolver(), myUri);
             }

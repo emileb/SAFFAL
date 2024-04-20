@@ -37,7 +37,6 @@ public class UtilsSAF
     */
     static TreeRoot treeRoot;
 
-
     // The root node of the selected SAF folder
     static DocumentNode documentRoot;
 
@@ -71,7 +70,6 @@ public class UtilsSAF
      */
     public static void setTreeRoot(@NonNull TreeRoot treeRoot)
     {
-
         UtilsSAF.treeRoot = treeRoot;
 
         documentRoot = new DocumentNode();
@@ -217,10 +215,6 @@ public class UtilsSAF
     // Found at: https://stackoverflow.com/questions/30546441/android-open-file-with-intent-chooser-from-uri-obtained-by-storage-access-frame
     public static String getFdPath(int fd)
     {
-
-        //if(true)
-        //    return "/proc/self/fd/" + fd;
-
         final String resolved;
 
         try
@@ -300,12 +294,22 @@ public class UtilsSAF
     static ParcelFileDescriptor getParcelDescriptor(String documentId, boolean write) throws IOException
     {
         //DBG("getFd read = " + docFile.canRead() + " write = " + docFile.canWrite() + " name = " + docFile.getName());
-        Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
+        Uri uri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
 
         // NOTE! If we are writing we ALWAYS truncate the file (rwt), this means append won't work, will fix if needed
-        ParcelFileDescriptor filePfd = context.getContentResolver().openFileDescriptor(childrenUri, write ? "rwt" : "r");
+        ParcelFileDescriptor filePfd = context.getContentResolver().openFileDescriptor(uri, write ? "rwt" : "r");
 
         return filePfd;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    static boolean renameDocument(String documentId, String newName) throws IOException
+    {
+        Uri uri = DocumentsContract.buildChildDocumentsUriUsingTree(UtilsSAF.getTreeRoot().uri, documentId);
+
+        DocumentsContract.renameDocument(context.getContentResolver(), uri, newName);
+
+        return true;
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)

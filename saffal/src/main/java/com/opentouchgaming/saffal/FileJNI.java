@@ -50,7 +50,6 @@ public class FileJNI
 
     public static int mkdir(String path)
     {
-
         Log.d(TAG, "mkdir path = " + path);
 
         FileSAF fileSAF = new FileSAF(path);
@@ -77,7 +76,6 @@ public class FileJNI
 
     public static int exists(String path)
     {
-
         Log.d(TAG, "exists path = " + path);
 
         FileSAF fileSAF = new FileSAF(path);
@@ -94,7 +92,6 @@ public class FileJNI
 
     public static int delete(String path)
     {
-
         Log.d(TAG, "delete path = " + path);
 
         FileSAF fileSAF = new FileSAF(path);
@@ -118,14 +115,12 @@ public class FileJNI
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public static String[] opendir(String path)
     {
-
         //Log.d(TAG, "opendir path = " + path);
 
         FileSAF fileSAF = new FileSAF(path);
 
         if (fileSAF.exists() && fileSAF.isDirectory)
         {
-
             FileSAF[] files = fileSAF.listFiles();
             String[] ret = new String[files.length];
 

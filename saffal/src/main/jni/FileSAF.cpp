@@ -277,24 +277,7 @@ extern "C"
 
 		return close_real(fd);
 	}
-	/*
-		// Only intercept mkdir to clear the invalid cache for when the app creates a new dir
-		int mkdir(const char *path, mode_t mode)
-		{
-			// Clear the invalid path cache so we can read files in newly created folder
-			if(cacheInvalidPaths)
-			{
-				invalidPaths.clear();
-			}
 
-			static int (*mkdir_real)(const char *path, mode_t mode) = NULL;
-
-			if(mkdir_real == NULL)
-				mkdir_real = (int(*)(const char *path, mode_t mode))loadRealFunc("mkdir");
-
-			return mkdir_real(path, mode);
-		}
-	    */
 	//------------------------
 	// mkdir INTERCEPT
 	//------------------------
@@ -437,7 +420,6 @@ extern "C"
 		}
 	}
 
-
 	class DIR_SAF
 	{
 	public:
@@ -464,7 +446,7 @@ extern "C"
 
 			if(items.size() > 0)
 			{
-				// Create out own DIR object and fill with the data we need
+				// Create our own DIR object and fill with the data we need
 				DIR_SAF* dirSaf = new DIR_SAF();
 				dirSaf->position = 0;
 
