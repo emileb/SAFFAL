@@ -107,6 +107,7 @@ static void closeFd(int fd)
 		LOGI("FileCache_closeFile FOUND  %s", cacheActive[fd].c_str());
 
 #if 1
+
 		// If we haven't already got a cached of this file, add it now
 		if(cacheFree.find(cacheActive[fd]) == cacheFree.end())
 		{

@@ -471,7 +471,7 @@ public class FileSAF extends File
                 // Clear the cache, not very efficient as clears everything but fine for now
                 if (parentNode != null && parentNode.isDirectory)
                 {
-                   parentNode.clearCache();
+                    parentNode.clearCache();
                 }
             }
 
