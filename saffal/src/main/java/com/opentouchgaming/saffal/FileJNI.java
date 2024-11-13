@@ -5,7 +5,9 @@ import android.util.Log;
 
 import androidx.annotation.RequiresApi;
 
+import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 public class FileJNI
 {
@@ -120,6 +122,10 @@ public class FileJNI
             // Attempt file rename
             try
             {
+                // Delete target file, otherwise SAF creates random new filenames
+                if(newFile.exists())
+                    newFile.delete();
+
                 oldFile.rename(newFile.getName());
                 return 0;
             }
@@ -131,8 +137,51 @@ public class FileJNI
         }
         else
         {
-            Log.e(TAG, "Parent paths for rename do not match: " + oldParent + " -> " + newParent);
-            return -1;
+            // If both files in SAF need to copy the data for a rename
+            if (UtilsSAF.isInSAFRoot(oldParent) && UtilsSAF.isInSAFRoot(newParent))
+            {
+                if (oldFile.exists())
+                {
+                    try
+                    {
+                        if(newFile.exists())
+                            newFile.delete();
+
+                        newFile.createNewFile();
+                        InputStream in = oldFile.getInputStream();
+                        DataOutputStream out = new DataOutputStream(newFile.getOutputStream());
+
+                        byte[] buffer = new byte[1024 * 4];
+                        int read;
+                        while ((read = in.read(buffer)) != -1)
+                        {
+                            out.write(buffer, 0, read);
+                        }
+
+                        // Delete the file moved
+                        oldFile.delete();
+
+                        // Clear the caches of the parents as files have changed
+                        new FileSAF(oldParent).clearCache();
+                        new FileSAF(newParent).clearCache();
+
+                        return 0;
+                    }
+                    catch (IOException e)
+                    {
+                        e.printStackTrace();
+                        Log.e(TAG, "Failed to rename file by copying " + oldParent + " -> " + newParent);
+                        return -1;
+                    }
+                }
+                Log.e(TAG, "Files already or do not exist for rename");
+                return -1;
+            }
+            else
+            {
+                Log.e(TAG, "Parent paths for rename do not match: " + oldParent + " -> " + newParent);
+                return -1;
+            }
         }
     }
 

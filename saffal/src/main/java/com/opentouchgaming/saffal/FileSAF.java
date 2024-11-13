@@ -479,6 +479,14 @@ public class FileSAF extends File
         }
     }
 
+    public void clearCache()
+    {
+        updateDocumentNode(true);
+        if(documentNode != null && documentNode.isDirectory)
+        {
+            documentNode.clearCache();
+        }
+    }
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void updateDocumentNode(boolean forceUpdate)
     {
@@ -495,6 +503,8 @@ public class FileSAF extends File
             }
         }
     }
+
+
 
     private void DBG(String str)
     {
