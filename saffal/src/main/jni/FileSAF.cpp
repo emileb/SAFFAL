@@ -31,7 +31,7 @@
 static std::map<std::string, int> invalidPaths;
 bool cacheInvalidPaths = true;
 
-extern "C" void clearUserFilesFromCache();
+extern "C" void clearUserFilesFromCache(int lock);
 
 extern "C"
 {
@@ -379,7 +379,7 @@ extern "C"
 		if(inSAF)
 		{
             // Remove all user files from cache
-            clearUserFilesFromCache();
+            clearUserFilesFromCache(1);
 
 			return FileJNI_delete(path);
 		}
@@ -653,7 +653,7 @@ extern "C"
 		if(inSAFOld && inSAFNew)
 		{
             // Remove all user files from cache
-            clearUserFilesFromCache();
+            clearUserFilesFromCache(1);
 
 			return FileJNI_rename(old_filename, new_filename);
 		}

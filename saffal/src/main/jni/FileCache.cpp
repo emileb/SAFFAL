@@ -42,10 +42,11 @@ void FileCache_init()
 	pthread_mutex_init(&lock, NULL);
 }
 
-extern "C"  void clearUserFilesFromCache()
+extern "C"  void clearUserFilesFromCache(int mutextLock)
 {
-    MUTEX_LOCK
-
+    if(mutextLock) {
+        MUTEX_LOCK
+    }
     for (auto it = cacheFree.begin(); it != cacheFree.end();)
     {
         if (it->first.find("user_files") != std::string::npos)
@@ -64,8 +65,9 @@ extern "C"  void clearUserFilesFromCache()
             ++it;
         }
     }
-
-    MUTEX_UNLOCK
+    if(mutextLock) {
+        MUTEX_UNLOCK
+    }
 }
 
 int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(const char * filename, const char * mode))
@@ -81,7 +83,7 @@ int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(co
 	//if(strchr(mode, 'w') || strchr(mode, 'a') || strstr(filename, "user_files"))
     if(strchr(mode, 'w') || strchr(mode, 'a'))
 	{
-        clearUserFilesFromCache();
+        clearUserFilesFromCache(0);
 		fd = openFunc(filename, mode);
 	}
 	else
