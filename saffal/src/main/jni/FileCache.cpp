@@ -20,6 +20,8 @@ static const int MAXIMUM_CACHED_FILES = 1024 * 2;
 #define LOGI(...)
 #endif
 
+#define LOGIALWAYS(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileCache NDK", __VA_ARGS__))
+
 static pthread_mutex_t lock;
 
 #if 1
@@ -30,6 +32,7 @@ static pthread_mutex_t lock;
 #define MUTEX_UNLOCK
 #endif
 
+extern "C" void* loadRealFunc(const char * name); // In FileSAF.cpp
 
 static std::map<int, std::string> cacheActive;
 static std::map<std::string, int> cacheFree;
@@ -37,6 +40,32 @@ static std::map<std::string, int> cacheFree;
 void FileCache_init()
 {
 	pthread_mutex_init(&lock, NULL);
+}
+
+extern "C"  void clearUserFilesFromCache()
+{
+    MUTEX_LOCK
+
+    for (auto it = cacheFree.begin(); it != cacheFree.end();)
+    {
+        if (it->first.find("user_files") != std::string::npos)
+        {
+            LOGIALWAYS("Removing user_file from cache: %s", it->first.c_str());
+
+            static int (*close_real)(int) = NULL;
+
+            if(close_real == NULL)
+                close_real = (int(*)(int))loadRealFunc("close");
+
+            close_real(it->second);
+
+            it = cacheFree.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    MUTEX_UNLOCK
 }
 
 int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(const char * filename, const char * mode))
@@ -49,8 +78,10 @@ int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(co
 	snprintf(fileTag, 256, "%s - %s", filename, mode);
 
 	// Check if writing, if so DO NOT CACHE, also do not cache in user_files
-	if(strchr(mode, 'w') || strchr(mode, 'a') || strstr(filename, "user_files"))
+	//if(strchr(mode, 'w') || strchr(mode, 'a') || strstr(filename, "user_files"))
+    if(strchr(mode, 'w') || strchr(mode, 'a'))
 	{
+        clearUserFilesFromCache();
 		fd = openFunc(filename, mode);
 	}
 	else
@@ -92,7 +123,6 @@ int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(co
 	return fd;
 }
 
-extern "C" void* loadRealFunc(const char * name); // In FileSAF.cpp
 
 static void closeFd(int fd)
 {
