@@ -8,6 +8,7 @@
 #include <pthread.h>
 
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileJNI NDK", __VA_ARGS__))
+#define LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN,"FileJNI NDK", __VA_ARGS__))
 
 static pthread_mutex_t lock;
 
@@ -123,6 +124,9 @@ int FileJNI_fopen(const char * filename, const char * mode)
 	// Call Java function
 	// Returns -1 for invalid file in SAF. Else a valid FD
 	int ret = (env)->CallStaticIntMethod(FileJNI_cls, fopen_method, filenameStr, modeStr);
+
+    if(ret > 0)
+        LOGW("Opened file from SAF: %s", filename);
 
 	(env)->DeleteLocalRef(filenameStr);
 	(env)->DeleteLocalRef(modeStr);
