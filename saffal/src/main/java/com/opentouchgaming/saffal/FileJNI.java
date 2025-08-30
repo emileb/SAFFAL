@@ -78,7 +78,7 @@ public class FileJNI
 
     public static int exists(String path)
     {
-        Log.d(TAG, "exists path = " + path);
+        //Log.d(TAG, "exists path = " + path);
 
         FileSAF fileSAF = new FileSAF(path);
 
