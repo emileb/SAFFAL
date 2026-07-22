@@ -190,6 +190,7 @@ public class FileSAF extends File
                 {
                     String filename = getName();
                     parentNode.createChild(false, filename);
+                    parentNode.clearCache();
                     return true;
                 }
                 else
@@ -308,13 +309,19 @@ public class FileSAF extends File
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     public int getFd(boolean write, boolean detach)
     {
+        return getFd(write, false, detach);
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public int getFd(boolean write, boolean append, boolean detach)
+    {
         updateDocumentNode(true);
 
         if (documentNode != null)
         {
             try
             {
-                parcelFileDescriptor = UtilsSAF.getParcelDescriptor(documentNode.documentId, documentNode.treeUri, write);
+                parcelFileDescriptor = UtilsSAF.getParcelDescriptor(documentNode.documentId, documentNode.treeUri, write, append);
                 if (detach)
                     fd = parcelFileDescriptor.detachFd();
                 else

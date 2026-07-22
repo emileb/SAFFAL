@@ -20,7 +20,8 @@ public class FileJNI
     {
         // Log.d(TAG, "fopen file = " + filePath);
 
-        boolean write = mode.contains("w") || mode.contains("a");
+        boolean append = mode.contains("a");
+        boolean write = mode.contains("w") || append;
 
         FileSAF fileSAF = new FileSAF(filePath);
 
@@ -43,7 +44,7 @@ public class FileJNI
             }
         }
 
-        int fd = fileSAF.getFd(write, true);
+        int fd = fileSAF.getFd(write, append, true);
         //Log.d(TAG, "fd = " + fd);
 
         return fd;

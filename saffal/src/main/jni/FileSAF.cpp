@@ -146,11 +146,11 @@ extern "C"
 #define O_RDONLY        00
 #define O_WRONLY        01
 #define O_RDWR          02
+#define O_APPEND        02000
 
 			// Dark places uses raw open to write to files, check here
-			// NOTE 'append' mode will not work, it will always truncate!
 			if(oflag & (O_WRONLY | O_RDWR))
-				mode = "w";
+				mode = (oflag & O_APPEND) ? "a" : "w";
 
 			// fd = -1, not in SAF area, fd = 0, failed to open. Otherwise valid file
 			int fd = FileCache_getFd(fullFilename.c_str(), mode, FileJNI_fopen);

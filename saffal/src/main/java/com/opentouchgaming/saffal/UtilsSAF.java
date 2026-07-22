@@ -395,12 +395,13 @@ public class UtilsSAF
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    static ParcelFileDescriptor getParcelDescriptor(String documentId, Uri treeUri, boolean write) throws IOException
+    static ParcelFileDescriptor getParcelDescriptor(String documentId, Uri treeUri, boolean write, boolean append) throws IOException
     {
         Uri uri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId);
 
-        // NOTE! If we are writing we ALWAYS truncate the file (rwt), this means append won't work, will fix if needed
-        ParcelFileDescriptor filePfd = context.getContentResolver().openFileDescriptor(uri, write ? "rwt" : "r");
+        // Append keeps existing content ("wa"); plain write truncates ("rwt"). ContentResolver has no "rwa" mode.
+        String mode = !write ? "r" : (append ? "wa" : "rwt");
+        ParcelFileDescriptor filePfd = context.getContentResolver().openFileDescriptor(uri, mode);
 
         return filePfd;
     }
