@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <libgen.h>
+#include <string.h>
+#include <pthread.h>
 
 #include <string>
 #include <map>
@@ -125,6 +127,112 @@ extern "C"
 		return exists;
 	}
 
+/*
+	SAF parent-directory existence cache.
+
+	Every miss inside the SAF tree used to cost a full JNI round trip: stat(),
+	fopen() and access() all fall through to FileJNI, and FileCache only retains
+	successful opens, so a path that does not exist was re-asked on every probe.
+	A game's asset search walks several roots for each file it wants, and the
+	ones that live in an archive miss on all of them, so this dominated loading.
+
+	Caching the *parent directory* rather than the file collapses thousands of
+	distinct missing filenames onto a handful of answers. Ancestors are checked
+	too: once ".../q4base/models" is known to be absent, nothing beneath it can
+	exist, so no further JNI calls are made for any path under it.
+
+	checkPathExistsCache() above cannot be reused here -- it resolves the parent
+	with the real stat(), and a /[internal]/ path never exists on the real
+	filesystem, so it would report every SAF file as missing.
+*/
+	static std::map<std::string, int> safPathExists;
+	static pthread_mutex_t safPathExistsLock = PTHREAD_MUTEX_INITIALIZER;
+
+	static std::string parentOfPath(const std::string &path)
+	{
+		// not dirname(): bionic's is allowed to modify its argument and is not
+		// required to be thread safe
+		const size_t slash = path.find_last_of('/');
+
+		if(slash == std::string::npos)
+			return std::string();
+
+		if(slash == 0)  // root
+			return std::string("/");
+
+		return path.substr(0, slash);
+	}
+
+// Called whenever something may have created a directory that was cached as missing
+	void clearSAFPathExistsCache()
+	{
+		pthread_mutex_lock(&safPathExistsLock);
+		safPathExists.clear();
+		pthread_mutex_unlock(&safPathExistsLock);
+	}
+
+// Returns false only when the directory, or one of its ancestors, is known not to exist
+	bool safDirectoryExists(const std::string &parent)
+	{
+		if(parent.length() <= 2)   // too short to be a real path, let the caller proceed
+			return true;
+
+		bool decided = false;
+		bool result = false;
+
+		pthread_mutex_lock(&safPathExistsLock);
+
+		// If any ancestor is already known to be missing then so is this one.
+		// Walking up stops at the first cached answer, so a deep tree costs a
+		// few map lookups rather than a JNI call per level.
+		for(std::string dir = parent; dir.length() > 2; dir = parentOfPath(dir))
+		{
+			std::map<std::string, int>::const_iterator it = safPathExists.find(dir);
+
+			if(it == safPathExists.end())
+				continue;
+
+			if(it->second == 0)
+			{
+				// nothing can exist below a directory that does not
+				decided = true;
+				result = false;
+			}
+			else if(dir == parent)
+			{
+				decided = true;
+				result = true;
+			}
+			// an intermediate directory existing says nothing about the parent,
+			// so in that case fall through and ask
+
+			break;
+		}
+
+		pthread_mutex_unlock(&safPathExistsLock);
+
+		if(decided)
+			return result;
+
+		// Not known yet, so ask across JNI once. The lock is deliberately not
+		// held here: FileJNI takes its own, and a duplicate query is harmless.
+		const bool exists = (FileJNI_exists(parent.c_str()) != 0);
+
+		LOGI("checkSAFPathExistsCache %s = %d", parent.c_str(), exists);
+
+		pthread_mutex_lock(&safPathExistsLock);
+		safPathExists[parent] = exists ? 1 : 0;
+		pthread_mutex_unlock(&safPathExistsLock);
+
+		return exists;
+	}
+
+// Returns false only when a parent directory is known not to exist
+	bool checkSAFPathExistsCache(const std::string &fullFilename)
+	{
+		return safDirectoryExists(parentOfPath(fullFilename));
+	}
+
 //------------------------
 // open INTERCEPT
 // The only reason this is here is because one engine I use uses 'open' to test the presence of a file
@@ -151,6 +259,16 @@ extern "C"
 			// Dark places uses raw open to write to files, check here
 			if(oflag & (O_WRONLY | O_RDWR))
 				mode = (oflag & O_APPEND) ? "a" : "w";
+
+			if(mode[0] != 'r')
+			{
+				// this call may create the tree that was cached as missing
+				clearSAFPathExistsCache();
+			}
+			else if(cacheInvalidPaths && !checkSAFPathExistsCache(fullFilename))
+			{
+				return -1;  // parent directory does not exist, so neither can the file
+			}
 
 			// fd = -1, not in SAF area, fd = 0, failed to open. Otherwise valid file
 			int fd = FileCache_getFd(fullFilename.c_str(), mode, FileJNI_fopen);
@@ -219,6 +337,16 @@ extern "C"
 
 		if(inSAF)
 		{
+			if(strchr(mode, 'w') || strchr(mode, 'a'))
+			{
+				// this call may create the tree that was cached as missing
+				clearSAFPathExistsCache();
+			}
+			else if(cacheInvalidPaths && !checkSAFPathExistsCache(fullFilename))
+			{
+				return NULL;  // parent directory does not exist, so neither can the file
+			}
+
 			int fd = FileCache_getFd(fullFilename.c_str(), mode, FileJNI_fopen);
 
 			LOGI("fopen: file = %s, mode = %s, fd = %d", fullFilename.c_str(), mode, fd);
@@ -289,6 +417,7 @@ extern "C"
 		if(cacheInvalidPaths)
 		{
 			invalidPaths.clear();
+			clearSAFPathExistsCache();
 		}
 
 		// Remove relative paths (../ etc)
@@ -332,6 +461,9 @@ extern "C"
 
 		if(inSAF)
 		{
+			if(cacheInvalidPaths && !checkSAFPathExistsCache(fullFilename))
+				return -1;  // parent directory does not exist, so neither can the file
+
 			// Try to get an fd
 			int fd = FileCache_getFd(fullFilename.c_str(), "r", FileJNI_fopen);
 
@@ -381,6 +513,9 @@ extern "C"
             // Remove all user files from cache
             clearUserFilesFromCache(1);
 
+			// a deleted directory must not stay cached as present
+			clearSAFPathExistsCache();
+
 			return FileJNI_delete(path);
 		}
 		else
@@ -408,6 +543,9 @@ extern "C"
 
 		if(inSAF)
 		{
+			if(cacheInvalidPaths && !checkSAFPathExistsCache(fullFilename))
+				return -1;  // parent directory does not exist, so neither can the file
+
 			// TODO! Check mode for access bits
 			if(FileJNI_exists(fullFilename.c_str()))
 				return 0;
@@ -447,6 +585,13 @@ extern "C"
 
 		if(inSAF)
 		{
+			// Case-insensitive path recovery enumerates directories rather than
+			// opening files, so it arrives here and not at stat()/fopen(). Without
+			// this check every recovery attempt below a missing directory is a
+			// fresh JNI listing.
+			if(cacheInvalidPaths && !safDirectoryExists(fullFilename))
+				return NULL;
+
 			std::vector <std::string> items = FIleJNI_opendir(fullFilename.c_str());
 
 			if(items.size() > 0)
@@ -654,6 +799,9 @@ extern "C"
 		{
             // Remove all user files from cache
             clearUserFilesFromCache(1);
+
+			// the move changes what exists on both sides
+			clearSAFPathExistsCache();
 
 			return FileJNI_rename(old_filename, new_filename);
 		}

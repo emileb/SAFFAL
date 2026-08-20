@@ -53,7 +53,7 @@ public class FileJNI
 
     public static int mkdir(String path)
     {
-        Log.d(TAG, "mkdir path = " + path);
+        //Log.d(TAG, "mkdir path = " + path);
 
         FileSAF fileSAF = new FileSAF(path);
 
