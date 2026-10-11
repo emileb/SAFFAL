@@ -4,7 +4,7 @@ android {
     compileSdkVersion 35
 
     defaultConfig {
-        minSdkVersion 19
+        minSdkVersion 21
         targetSdkVersion 35
         versionCode 1
         versionName "1.0"
@@ -24,7 +24,7 @@ android {
             path file('src/main/jni/Android_dummy.mk')
         }
     }
-    ndkVersion '24.0.8215888'
+    ndkVersion '27.3.13750724'
     namespace 'com.opentouchgaming.saffal'
 }
 
