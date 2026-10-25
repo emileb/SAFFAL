@@ -12,7 +12,7 @@
 
 #include <android/log.h>
 
-static const int MAXIMUM_CACHED_FILES = 256;
+static int maxCachedFiles = 256; // FileCache_setMaxCached
 
 #if 0
 #define LOGI(...) ((void)__android_log_print(ANDROID_LOG_INFO,"FileCache NDK", __VA_ARGS__))
@@ -40,6 +40,11 @@ static std::map<std::string, int> cacheFree;
 void FileCache_init()
 {
 	pthread_mutex_init(&lock, NULL);
+}
+
+void FileCache_setMaxCached(int max)
+{
+	maxCachedFiles = max;
 }
 
 extern "C"  void clearUserFilesFromCache(int mutextLock)
@@ -144,7 +149,7 @@ static void closeFd(int fd)
 		if(cacheFree.find(cacheActive[fd]) == cacheFree.end())
 		{
 			// Free a file when over the cached limit
-			if(cacheFree.size() > MAXIMUM_CACHED_FILES)
+			if(cacheFree.size() > maxCachedFiles)
 			{
 				// NOTE: This essentially take a random file from the cache, whatever happens to be sorted to the front.
 				// Better method would be to have them sorted in last used in another list

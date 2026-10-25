@@ -35,6 +35,14 @@ public class UtilsSAF
 
     static List<TreeRoot> treeRoots = new ArrayList<>();
 
+    // Opt-in: open a folder's other files in parallel after one is read, and keep more closed fds for reuse
+    // (faster loading of many loose files). Call after setContext, which loads the native library.
+    public static void setPrefetch(boolean enabled)
+    {
+        SAFPrefetch.enabled = enabled;
+        FileJNI.setFdCacheSize(enabled ? 1024 : 256);
+    }
+
     /**
      * Set a Context so all operations don't need to pass in a new one
      *

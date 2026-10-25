@@ -117,6 +117,11 @@ extern "C" void JNICALL Java_com_opentouchgaming_saffal_FileJNI_initSAFPaths(JNI
 }
 
 
+extern "C" void JNICALL Java_com_opentouchgaming_saffal_FileJNI_setFdCacheSize(JNIEnv* env, jclass cls, jint size)
+{
+	FileCache_setMaxCached(size);
+}
+
 int FileJNI_fopen(const char * filename, const char * mode)
 {
 	MUTEX_LOCK

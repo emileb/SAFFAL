@@ -16,12 +16,24 @@ public class FileJNI
     // Init the C library with all current SAF root paths so path checks can be done in C code
     public static native void initSAFPaths(String[] SAFPaths, int cacheNativeFs);
 
+    // How many closed SAF fds the native side keeps for reuse (default 256)
+    public static native void setFdCacheSize(int size);
+
     public static int fopen(final String filePath, final String mode)
     {
         // Log.d(TAG, "fopen file = " + filePath);
 
         boolean append = mode.contains("a");
         boolean write = mode.contains("w") || append;
+
+        if (write)
+            SAFPrefetch.invalidate(filePath);
+        else
+        {
+            int fd = SAFPrefetch.take(filePath);
+            if (fd > 0)
+                return fd;
+        }
 
         FileSAF fileSAF = new FileSAF(filePath);
 
@@ -46,6 +58,9 @@ public class FileJNI
 
         int fd = fileSAF.getFd(write, append, true);
         //Log.d(TAG, "fd = " + fd);
+
+        if (!write && fd > 0)
+            SAFPrefetch.fileOpened(fileSAF);
 
         return fd;
     }
@@ -97,6 +112,7 @@ public class FileJNI
     {
         Log.d(TAG, "delete path = " + path);
 
+        SAFPrefetch.invalidate(path);
         FileSAF fileSAF = new FileSAF(path);
 
         if (fileSAF.delete())
@@ -112,6 +128,8 @@ public class FileJNI
     public static int rename(String oldFilename, String newFilename)
     {
         Log.d(TAG, "rename old = " + oldFilename + ", new = " + newFilename);
+        SAFPrefetch.invalidate(oldFilename);
+        SAFPrefetch.invalidate(newFilename);
         FileSAF oldFile = new FileSAF(oldFilename);
         FileSAF newFile = new FileSAF(newFilename);
 
