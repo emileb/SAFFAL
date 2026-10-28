@@ -118,8 +118,8 @@ int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(co
 	}
 	cacheMode[m] = 0;
 
-	static char fileTag[256]; // Need to include the filename AND the mode, can not mix modes
-	snprintf(fileTag, 256, "%s - %s", filename, cacheMode);
+	static char fileTag[512]; // Need to include the filename AND the mode, can not mix modes
+	snprintf(fileTag, sizeof(fileTag), "%s - %s", filename, cacheMode);
 
 	// Check if writing, if so DO NOT CACHE, also do not cache in user_files
 	//if(strchr(mode, 'w') || strchr(mode, 'a') || strstr(filename, "user_files"))
