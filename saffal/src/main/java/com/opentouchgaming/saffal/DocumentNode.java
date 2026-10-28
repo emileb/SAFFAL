@@ -46,21 +46,20 @@ public class DocumentNode
 
         if (documentPath != null)
         {
-            // Split path into parts
-            String[] parts = documentPath.split("\\/", -1);
-
             node = rootNode;
 
-            for (String part : parts)
+            // Walk the path by hand, String.split compiles a regex on every call and this runs per file access
+            int start = 0;
+            while (node != null && start <= documentPath.length())
             {
-                if (part.length() > 0)
-                { // part will be an empty string if documentPath was an empty string
+                int end = documentPath.indexOf('/', start);
+                if (end < 0)
+                    end = documentPath.length();
 
-                    if (node == null)
-                        break;
+                if (end > start) // Empty when documentPath is "" or has a double slash
+                    node = node.findChild(documentPath.substring(start, end));
 
-                    node = node.findChild(part);
-                }
+                start = end + 1;
             }
         }
 

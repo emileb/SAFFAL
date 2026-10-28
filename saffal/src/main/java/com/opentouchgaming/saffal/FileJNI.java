@@ -108,6 +108,10 @@ public class FileJNI
     {
         //Log.d(TAG, "exists path = " + path);
 
+        // Native already normalised the path, so skip the FileSAF canonicalisation (realpath) and go straight to the listing cache
+        if (UtilsSAF.isInSAFRoot(path))
+            return UtilsSAF.findDocumentNode(path) != null ? 1 : 0;
+
         FileSAF fileSAF = new FileSAF(path);
 
         if (fileSAF.exists())
