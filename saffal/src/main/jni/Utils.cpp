@@ -1,6 +1,7 @@
 #include "Utils.h"
 
 #include <stdio.h>
+#include <pthread.h>
 #include <string>
 #include <vector>
 
@@ -9,6 +10,9 @@
 
 
 static std::vector<std::string> m_SAFPaths;
+
+static std::string m_virtualCwd;
+static pthread_mutex_t m_virtualCwdLock = PTHREAD_MUTEX_INITIALIZER;
 
 // This is from https://stackoverflow.com/questions/28659344/alternative-to-realpath-to-resolve-and-in-a-path
 #define IS_SLASH(s) (s == '/')
@@ -114,6 +118,45 @@ std::string getCanonicalPath(std::string path)
 	ap_getparents(pathC);
 
 	return std::string(pathC);
+}
+
+void setVirtualCwd(const std::string &path)
+{
+	pthread_mutex_lock(&m_virtualCwdLock);
+	m_virtualCwd = path;
+	pthread_mutex_unlock(&m_virtualCwdLock);
+}
+
+std::string getVirtualCwd()
+{
+	pthread_mutex_lock(&m_virtualCwdLock);
+	std::string cwd = m_virtualCwd;
+	pthread_mutex_unlock(&m_virtualCwdLock);
+	return cwd;
+}
+
+std::string getFullPath(const char *path, bool *resolved)
+{
+	if(resolved)
+		*resolved = false;
+
+	if(path == nullptr)
+		return std::string();
+
+	if(path[0] != '/')
+	{
+		std::string cwd = getVirtualCwd();
+
+		if(!cwd.empty())
+		{
+			if(resolved)
+				*resolved = true;
+
+			return getCanonicalPath(cwd + "/" + path);
+		}
+	}
+
+	return getCanonicalPath(path);
 }
 
 bool isInSAF(std::string path)

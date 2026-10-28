@@ -12,6 +12,8 @@
 #include <libgen.h>
 #include <string.h>
 #include <pthread.h>
+#include <errno.h>
+#include <stdlib.h>
 
 #include <string>
 #include <map>
@@ -25,6 +27,9 @@
 #else
 #define LOGI(...)
 #endif
+
+// Always on: the virtual working directory changes where an engine's relative paths go
+#define LOGW(...) ((void)__android_log_print(ANDROID_LOG_WARN,"SAFFAL", __VA_ARGS__))
 
 // Use to disable interception
 #if 1
@@ -243,7 +248,7 @@ extern "C"
 		LOGI("open %s, %d %d", path, oflag, modes);
 
 		// Remove relative paths (../ etc)
-		std::string fullFilename = getCanonicalPath(path);
+		std::string fullFilename = getFullPath(path);
 
 		bool inSAF = isInSAF(fullFilename);
 
@@ -328,7 +333,7 @@ extern "C"
 		FILE *file = NULL;
 
 		// Remove relative paths (../ etc)
-		std::string fullFilename = getCanonicalPath(filename);
+		std::string fullFilename = getFullPath(filename);
 
 		//LOGI("fopen: file = %s, mode = %s", fullFilename.c_str(), mode);
 
@@ -421,7 +426,7 @@ extern "C"
 		}
 
 		// Remove relative paths (../ etc)
-		std::string fullPath = getCanonicalPath(path);
+		std::string fullPath = getFullPath(path);
 
 		LOGI("mkdir %s, %d. fullPath %s", path, mode, fullPath.c_str());
 
@@ -455,7 +460,7 @@ extern "C"
 	{
 		LOGI("stat %s", path);
 
-		std::string fullFilename = getCanonicalPath(path);
+		std::string fullFilename = getFullPath(path);
 
 		bool inSAF = isInSAF(fullFilename);
 
@@ -504,7 +509,8 @@ extern "C"
 	{
 		LOGI("remove %s", path);
 
-		std::string fullFilename = getCanonicalPath(path);
+		bool resolved;
+		std::string fullFilename = getFullPath(path, &resolved);
 
 		bool inSAF = isInSAF(fullFilename);
 
@@ -516,7 +522,7 @@ extern "C"
 			// a deleted directory must not stay cached as present
 			clearSAFPathExistsCache();
 
-			return FileJNI_delete(path);
+			return FileJNI_delete(resolved ? fullFilename.c_str() : path);
 		}
 		else
 		{
@@ -537,7 +543,7 @@ extern "C"
 	{
 		LOGI("access %s", pathname);
 
-		std::string fullFilename = getCanonicalPath(pathname);
+		std::string fullFilename = getFullPath(pathname);
 
 		bool inSAF = isInSAF(fullFilename);
 
@@ -579,7 +585,7 @@ extern "C"
 	{
 		LOGI("opendir %s", name);
 
-		std::string fullFilename = getCanonicalPath(name);
+		std::string fullFilename = getFullPath(name);
 
 		bool inSAF = isInSAF(fullFilename);
 
@@ -715,7 +721,7 @@ extern "C"
 	{
 		LOGI("scandir %s", dirp);
 
-		std::string fullFilename = getCanonicalPath(dirp);
+		std::string fullFilename = getFullPath(dirp);
 
 		bool inSAF = isInSAF(fullFilename);
 
@@ -789,8 +795,9 @@ extern "C"
 	{
 		LOGI("rename %s -> %s", old_filename, new_filename);
 
-		std::string fullFilenameOld = getCanonicalPath(old_filename);
-		std::string fullFilenameNew = getCanonicalPath(new_filename);
+		bool resolvedOld, resolvedNew;
+		std::string fullFilenameOld = getFullPath(old_filename, &resolvedOld);
+		std::string fullFilenameNew = getFullPath(new_filename, &resolvedNew);
 
 		bool inSAFOld = isInSAF(fullFilenameOld);
 		bool inSAFNew = isInSAF(fullFilenameNew);
@@ -803,7 +810,7 @@ extern "C"
 			// the move changes what exists on both sides
 			clearSAFPathExistsCache();
 
-			return FileJNI_rename(old_filename, new_filename);
+			return FileJNI_rename(resolvedOld ? fullFilenameOld.c_str() : old_filename, resolvedNew ? fullFilenameNew.c_str() : new_filename);
 		}
 		else
 		{
@@ -814,6 +821,106 @@ extern "C"
 
 			return rename_real(old_filename, new_filename);
 		}
+	}
+
+//------------------------
+// chdir INTERCEPT
+// A SAF folder can't be the real working directory, so chdir() into one sets a virtual working
+// directory that relative paths are resolved against. Any other chdir() is the real one.
+//------------------------
+	int chdir(const char *path)
+	{
+		static int (*chdir_real)(const char *path) = NULL;
+
+		if(chdir_real == NULL)
+			chdir_real = (int (*)(const char *path)) loadRealFunc("chdir");
+
+		if(path == NULL)
+			return chdir_real(path);
+
+		std::string fullPath = getFullPath(path);
+
+		while(fullPath.length() > 1 && fullPath.back() == '/')
+			fullPath.pop_back();
+
+		if(isInSAF(fullPath))
+		{
+			if(!FileJNI_exists(fullPath.c_str()))
+			{
+				LOGW("chdir(\"%s\"): SAF folder %s does not exist", path, fullPath.c_str());
+				errno = ENOENT;
+				return -1;
+			}
+
+			setVirtualCwd(fullPath);
+			LOGW("chdir(\"%s\"): %s is a SAF folder, using it as a VIRTUAL working directory for relative paths", path, fullPath.c_str());
+			return 0;
+		}
+
+		int ret = chdir_real(path);
+
+		if(ret == 0)
+		{
+			std::string virtualCwd = getVirtualCwd();
+
+			if(!virtualCwd.empty())
+			{
+				LOGW("chdir(\"%s\"): leaving VIRTUAL working directory %s, back to the real one", path, virtualCwd.c_str());
+				setVirtualCwd("");
+			}
+		}
+
+		return ret;
+	}
+
+//------------------------
+// getcwd INTERCEPT
+// Returns the virtual working directory while one is set, see chdir()
+//------------------------
+	char *getcwd(char *buf, size_t size)
+	{
+		std::string virtualCwd = getVirtualCwd();
+
+		if(virtualCwd.empty())
+		{
+			static char *(*getcwd_real)(char *buf, size_t size) = NULL;
+
+			if(getcwd_real == NULL)
+				getcwd_real = (char *(*)(char *buf, size_t size)) loadRealFunc("getcwd");
+
+			return getcwd_real(buf, size);
+		}
+
+		size_t needed = virtualCwd.length() + 1;
+
+		if(buf == NULL) // bionic allocates when buf is NULL, size 0 meaning as big as needed
+		{
+			if(size < needed)
+			{
+				if(size != 0)
+				{
+					errno = ERANGE;
+					return NULL;
+				}
+				size = needed;
+			}
+
+			buf = (char *) malloc(size);
+
+			if(buf == NULL)
+			{
+				errno = ENOMEM;
+				return NULL;
+			}
+		}
+		else if(size < needed)
+		{
+			errno = ERANGE;
+			return NULL;
+		}
+
+		memcpy(buf, virtualCwd.c_str(), needed);
+		return buf;
 	}
 }
 #endif
