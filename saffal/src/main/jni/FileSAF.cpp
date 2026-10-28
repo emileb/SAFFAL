@@ -17,6 +17,7 @@
 #include <stdlib.h>
 
 #include <string>
+#include <functional>
 #include <map>
 #include <vector>
 #include <set>
@@ -476,6 +477,9 @@ extern "C"
 			if(FileJNI_statInfo(fullFilename.c_str(), &isDir, &size, &modified))
 			{
 				memset(statbuf, 0, sizeof(struct stat));
+				// Engines compare dev/ino to tell files apart (Quakespasm COM_SameDirectory, fts cycle checks)
+				statbuf->st_dev = 0x5AF;
+				statbuf->st_ino = std::hash<std::string>()(fullFilename) | 1;
 				statbuf->st_mode = isDir ? (S_IFDIR | 0770) : (S_IFREG | 0660);
 				statbuf->st_nlink = 1;
 				statbuf->st_size = isDir ? 4096 : size;

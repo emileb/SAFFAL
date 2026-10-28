@@ -213,6 +213,12 @@ bool FileJNI_statInfo(const char * path, bool *isDir, long long *size, long long
 	jlongArray info = (jlongArray)(env)->CallStaticObjectMethod(FileJNI_cls, statInfo_method, pathStr);
 
 	bool ret = false;
+	if((env)->ExceptionCheck())
+	{
+		(env)->ExceptionClear(); // Treat a Java failure as "can't answer", the caller opens the file instead
+		info = NULL;
+	}
+
 	if(info != NULL)
 	{
 		jlong values[3];
