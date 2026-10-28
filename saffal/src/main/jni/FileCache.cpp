@@ -4,6 +4,9 @@
 
 #include <sys/types.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
 
 #include <map>
 #include <string>
@@ -75,14 +78,48 @@ extern "C"  void clearUserFilesFromCache(int mutextLock)
     }
 }
 
+// A second fd for a file already open, with its own file position, without another SAF round trip.
+static int reopenActiveFd(const char * fileTag)
+{
+	for (auto &active : cacheActive)
+	{
+		if (active.second == fileTag)
+		{
+			static int (*open_real)(const char *path, int oflag, mode_t modes) = NULL;
+
+			if(open_real == NULL)
+				open_real = (int(*)(const char *path, int oflag, mode_t modes))loadRealFunc("open");
+
+			char procPath[64];
+			snprintf(procPath, sizeof(procPath), "/proc/self/fd/%d", active.first);
+
+			int fd = open_real(procPath, O_RDONLY, 0);
+			if(fd < 0)
+				LOGIALWAYS("FileCache_getFd could not reopen %s via %s", fileTag, procPath);
+			return fd;
+		}
+	}
+	return -1;
+}
+
 int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(const char * filename, const char * mode))
 {
 	MUTEX_LOCK
 
 	int fd = 0;
 
+	// 'b' means nothing on Android, so "r" and "rb" share cached fds
+	char cacheMode[8];
+	int m = 0;
+	for (const char *c = mode; *c && m < (int)sizeof(cacheMode) - 1; c++)
+	{
+		if (*c != 'b')
+			cacheMode[m++] = *c;
+	}
+	cacheMode[m] = 0;
+
 	static char fileTag[256]; // Need to include the filename AND the mode, can not mix modes
-	snprintf(fileTag, 256, "%s - %s", filename, mode);
+	snprintf(fileTag, 256, "%s - %s", filename, cacheMode);
 
 	// Check if writing, if so DO NOT CACHE, also do not cache in user_files
 	//if(strchr(mode, 'w') || strchr(mode, 'a') || strstr(filename, "user_files"))
@@ -97,7 +134,10 @@ int FileCache_getFd(const char * filename, const char * mode, int (*openFunc)(co
 		if(cacheFree.find(fileTag) == cacheFree.end())       // not found
 		{
 			//LOGI("FileCache_getFd NOT FOUND");
-			fd = openFunc(filename, mode);
+			fd = (strcmp(cacheMode, "r") == 0) ? reopenActiveFd(fileTag) : -1;
+
+			if(fd <= 0)
+				fd = openFunc(filename, mode);
 
 			if(fd > 0)
 			{

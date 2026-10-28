@@ -8,6 +8,11 @@ import androidx.annotation.RequiresApi;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 public class FileJNI
 {
@@ -18,6 +23,9 @@ public class FileJNI
 
     // How many closed SAF fds the native side keeps for reuse (default 256)
     public static native void setFdCacheSize(int size);
+
+    // Files opened for writing in this process, stat() can't trust their listed size
+    private static final Set<String> writtenPaths = Collections.synchronizedSet(new HashSet<>());
 
     public static int fopen(final String filePath, final String mode)
     {
@@ -58,6 +66,10 @@ public class FileJNI
 
         int fd = fileSAF.getFd(write, append, true);
         //Log.d(TAG, "fd = " + fd);
+
+        // Listed size and date go out of date while it is written, so stat() opens it from now on
+        if (write && fd > 0)
+            writtenPaths.add(filePath.toLowerCase(Locale.ROOT));
 
         if (!write && fd > 0)
             SAFPrefetch.fileOpened(fileSAF);
@@ -106,6 +118,18 @@ public class FileJNI
         {
             return 0;
         }
+    }
+
+    // {1 if folder else 0, size, modified seconds} from the SAF listing, or null to open the file instead.
+    // Lets stat() skip a SAF open per file (~20-80 ms), Raze stats every loose file in the game folder.
+    public static long[] statInfo(String path)
+    {
+        DocumentNode node = UtilsSAF.findDocumentNode(path);
+        // A listed size of 0 may just be a provider that leaves it empty, open those to be sure
+        if (node == null || (!node.isDirectory && (node.size <= 0 || writtenPaths.contains(path.toLowerCase(Locale.ROOT)))))
+            return null;
+
+        return new long[]{node.isDirectory ? 1 : 0, node.size, node.modifiedDate / 1000};
     }
 
     public static int delete(String path)
@@ -215,16 +239,18 @@ public class FileJNI
     {
         //Log.d(TAG, "opendir path = " + path);
 
-        FileSAF fileSAF = new FileSAF(path);
+        DocumentNode dir = UtilsSAF.findDocumentNode(new FileSAF(path).getPath());
 
-        if (fileSAF.exists() && fileSAF.isDirectory)
+        if (dir != null && dir.isDirectory)
         {
-            FileSAF[] files = fileSAF.listFiles();
-            String[] ret = new String[files.length];
+            // Straight from the listing, a FileSAF per entry (canonical path + lookup) was ~3 ms each
+            ArrayList<DocumentNode> nodes = dir.getChildren();
+            String[] ret = new String[nodes.size()];
 
-            for (int n = 0; n < files.length; n++)
+            for (int n = 0; n < nodes.size(); n++)
             {
-                ret[n] = (files[n].isDirectory() ? "D" : "F") + files[n].getName();
+                DocumentNode node = nodes.get(n);
+                ret[n] = (node.isDirectory ? "D" : "F") + node.name;
             }
 
             return ret;

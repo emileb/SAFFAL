@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <string.h>
 #include <libgen.h>
 #include <string.h>
 #include <pthread.h>
@@ -468,6 +469,22 @@ extern "C"
 		{
 			if(cacheInvalidPaths && !checkSAFPathExistsCache(fullFilename))
 				return -1;  // parent directory does not exist, so neither can the file
+
+			// Answer from the SAF listing, an open costs ~20 ms per file and ~80 ms per folder
+			bool isDir;
+			long long size, modified;
+			if(FileJNI_statInfo(fullFilename.c_str(), &isDir, &size, &modified))
+			{
+				memset(statbuf, 0, sizeof(struct stat));
+				statbuf->st_mode = isDir ? (S_IFDIR | 0770) : (S_IFREG | 0660);
+				statbuf->st_nlink = 1;
+				statbuf->st_size = isDir ? 4096 : size;
+				statbuf->st_blksize = 4096;
+				statbuf->st_blocks = (statbuf->st_size + 511) / 512;
+				statbuf->st_atime = statbuf->st_mtime = statbuf->st_ctime = modified;
+				LOGI("stat %s from SAF listing, size = %lld", fullFilename.c_str(), size);
+				return 0;
+			}
 
 			// Try to get an fd
 			int fd = FileCache_getFd(fullFilename.c_str(), "r", FileJNI_fopen);

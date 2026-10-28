@@ -6,6 +6,7 @@ int FileJNI_fopen(const char * filename, const char * mode);
 int FileJNI_fclose(int fd);
 int FileJNI_mkdir(const char * path);
 int FileJNI_exists(const char * path);
+bool FileJNI_statInfo(const char * path, bool *isDir, long long *size, long long *modified);
 int FileJNI_delete(const char * path);
 int FileJNI_rename(const char * oldFilename, const char * newFilename);
 

@@ -67,6 +67,7 @@ static jmethodID fopen_method;
 static jmethodID fclose_method;
 static jmethodID mkdir_method;
 static jmethodID exists_method;
+static jmethodID statInfo_method;
 static jmethodID opendir_method;
 static jmethodID delete_method;
 static jmethodID rename_method;
@@ -87,6 +88,7 @@ extern "C" __attribute__((visibility("default"))) jint JNI_OnLoad(JavaVM* vm, vo
 	//fclose_method = (env)->GetStaticMethodID(FileJNI_cls, "fclose", "(I)I");
 	mkdir_method = (env)->GetStaticMethodID(FileJNI_cls, "mkdir", "(Ljava/lang/String;)I");
 	exists_method = (env)->GetStaticMethodID(FileJNI_cls, "exists", "(Ljava/lang/String;)I");
+	statInfo_method = (env)->GetStaticMethodID(FileJNI_cls, "statInfo", "(Ljava/lang/String;)[J");
 	delete_method = (env)->GetStaticMethodID(FileJNI_cls, "delete", "(Ljava/lang/String;)I");
 	opendir_method = (env)->GetStaticMethodID(FileJNI_cls, "opendir", "(Ljava/lang/String;)[Ljava/lang/String;");
 	rename_method = (env)->GetStaticMethodID(FileJNI_cls, "rename", "(Ljava/lang/String;Ljava/lang/String;)I");
@@ -190,6 +192,38 @@ int FileJNI_exists(const char * path)
 
 	// Call Java function
 	int ret = (env)->CallStaticIntMethod(FileJNI_cls, exists_method, pathStr);
+
+	(env)->DeleteLocalRef(pathStr);
+
+	MUTEX_UNLOCK
+
+	return ret;
+}
+
+// False if the SAF listing can't answer, then the file has to be opened
+bool FileJNI_statInfo(const char * path, bool *isDir, long long *size, long long *modified)
+{
+	MUTEX_LOCK
+
+	JNIEnv *env = NULL;
+	bool attached = getEnv(&env);
+
+	jstring pathStr = (env)->NewStringUTF(path);
+
+	jlongArray info = (jlongArray)(env)->CallStaticObjectMethod(FileJNI_cls, statInfo_method, pathStr);
+
+	bool ret = false;
+	if(info != NULL)
+	{
+		jlong values[3];
+		(env)->GetLongArrayRegion(info, 0, 3, values);
+		(env)->DeleteLocalRef(info);
+
+		*isDir = values[0] != 0;
+		*size = values[1];
+		*modified = values[2];
+		ret = true;
+	}
 
 	(env)->DeleteLocalRef(pathStr);
 

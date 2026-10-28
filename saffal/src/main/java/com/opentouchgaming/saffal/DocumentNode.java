@@ -12,6 +12,7 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 public class DocumentNode
@@ -29,6 +30,9 @@ public class DocumentNode
     public Uri treeUri;
 
     private List<DocumentNode> children;
+    // Name lookups, a linear search per stat() was seconds for a folder of thousands of files
+    private volatile HashMap<String, DocumentNode> childByName;
+    private volatile HashMap<String, DocumentNode> childByLowerName;
 
     /**
      * Traverse a tree to find a particular DocumentNode (file or directory). Path must look like:  folder1/folder2/file, or folder1/folder2/folder3
@@ -126,29 +130,16 @@ public class DocumentNode
 
         findChildren();
 
-        if (children != null)
+        HashMap<String, DocumentNode> byName = childByName;
+        HashMap<String, DocumentNode> byLowerName = childByLowerName;
+
+        if (byName != null && byLowerName != null)
         {
-            for (DocumentNode n : children)
-            {
-                if (n.name.contentEquals(name))
-                {
-                    node = n;
-                    break;
-                }
-            }
+            node = byName.get(name);
 
             // If didn't find the exact name, do a case insensitive search
             if (node == null && UtilsSAF.CASE_INSENSITIVE)
-            {
-                for (DocumentNode n : children)
-                {
-                    if (n.name.toLowerCase().contentEquals(name.toLowerCase()))
-                    {
-                        node = n;
-                        break;
-                    }
-                }
-            }
+                node = byLowerName.get(name.toLowerCase());
         }
         return node;
     }
@@ -218,6 +209,20 @@ public class DocumentNode
                         DBG("findChildren: Some Exception: " + ignored);
                     }
                 }
+
+                // First match wins, like the old linear search
+                HashMap<String, DocumentNode> byName = new HashMap<>();
+                HashMap<String, DocumentNode> byLowerName = new HashMap<>();
+                for (DocumentNode n : children)
+                {
+                    if (!byName.containsKey(n.name))
+                        byName.put(n.name, n);
+                    String lower = n.name.toLowerCase();
+                    if (!byLowerName.containsKey(lower))
+                        byLowerName.put(lower, n);
+                }
+                childByLowerName = byLowerName;
+                childByName = byName;
             }
         }
         else
@@ -230,6 +235,8 @@ public class DocumentNode
     public synchronized void clearCache()
     {
         children = null;
+        childByName = null;
+        childByLowerName = null;
     }
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)

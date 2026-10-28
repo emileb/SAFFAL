@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,7 +43,7 @@ class SAFPrefetch
 
     // Lower-cased path -> pending or finished open (fd, or -1)
     private static final ConcurrentHashMap<String, FutureTask<Integer>> prefetched = new ConcurrentHashMap<>();
-    private static final Set<String> foldersDone = ConcurrentHashMap.newKeySet();
+    private static final Set<String> foldersDone = Collections.newSetFromMap(new ConcurrentHashMap<>()); // newKeySet() is API 24+
     private static final AtomicInteger count = new AtomicInteger();
 
     // Keys queued per folder, oldest folder first, so unused fds can be reclaimed
