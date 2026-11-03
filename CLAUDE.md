@@ -32,7 +32,17 @@ Run it after any change to the native or Java SAF code:
 
 1. Install `saftest/build/outputs/apk/debug/saftest-debug.apk`, create a folder (`adb shell mkdir /sdcard/SAFTest`) and pick it once with "Pick SAF folder" (on Android 10 the picker hides internal storage until "Show internal storage" in its menu).
 2. `adb shell am start -n com.opentouchgaming.saftest/.MainActivity --ez autorun true`, wait for `SAFTEST FINISHED` in `adb logcat -s SAFTEST`.
-3. The report is in `/sdcard/Android/data/com.opentouchgaming.saftest/files/saftest_report.txt`: one `SAFTEST mode=...` summary per mode and a `FAIL` line per difference. Pass-through should always show 0. Compare SAF failures against the previous run; known differences are listed in the latest report.
+3. The report is in `/sdcard/Android/data/com.opentouchgaming.saftest/files/saftest_report.txt`: one `SAFTEST mode=...` summary per mode and a `FAIL` line per difference. Pass-through should always show 0. Compare SAF failures against the known differences below.
+
+Known differences, left unfixed on purpose. A run with only these shows 15 / 13 / 15 failures in launcher / game / game+prefetch:
+
+- `fopen` `"a+"` and `"r+"` fail with EINVAL, and `open(O_RDWR)` truncates.
+  - Java opens `"wa"` (write-only; ContentResolver has no `"rwa"`) or `"r"`, so `fdopen` rejects the descriptor, which then leaks.
+  - `O_RDWR` maps to `"w"`.
+  - Opening `"rw"` would fix all three, but needs testing across providers.
+- `mkdir` with a missing parent creates the parents (Java `mkdirs()`). A game might rely on this on SAF only.
+- The fd cache serves old contents after `remove` or `rename` outside `user_files`.
+- `scandir` ignores the sort callback (the test sorts results itself).
 
 ## Architecture
 

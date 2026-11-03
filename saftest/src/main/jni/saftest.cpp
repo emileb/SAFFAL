@@ -302,6 +302,28 @@ std::string searchPaths(const Fs &fs, const std::vector<std::string> &dirs, cons
 	return "not found";
 }
 
+// Ironwail's Sys_fopen: mkdir every folder from "/" (EEXIST is fine if stat says folder), then write
+std::string createPathWrite(const Fs &fs, const std::string &path, const std::string &data)
+{
+	for (size_t i = 1; i < path.size(); i++)
+	{
+		if (path[i] != '/')
+			continue;
+		std::string dir = path.substr(0, i);
+		errno = 0;
+		int r = fs.mkdir_(dir.c_str(), 0777);
+		if (r != 0 && errno == EEXIST)
+		{
+			struct stat st;
+			if (fs.stat_(dir.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
+				r = 0;
+		}
+		if (r != 0)
+			return "mkdir " + (dir.size() >= fs.root.size() ? relToRoot(fs, dir) : std::string("above root")) + " " + failed(errno);
+	}
+	return writeFile(fs, path, "w", data);
+}
+
 std::string listDir(const Fs &fs, const std::string &path)
 {
 	errno = 0;
@@ -494,6 +516,8 @@ void missingTests(const Fs &fs, Results &r)
 	r.add("missing: scandir", scanDir(fs, fs.p("nodir")));
 	r.add("missing: remove", removeStr(fs, fs.p("missing.txt")));
 	r.add("missing: rename", renameStr(fs, fs.p("missing.txt"), fs.p("other.txt")));
+	r.add("missing: rename onto existing", writeFile(fs, fs.p("keep.txt"), "w", "keep") + " " + renameStr(fs, fs.p("missing.txt"), fs.p("keep.txt")));
+	r.add("missing: target after failed rename", readAll(fs, fs.p("keep.txt")));
 	r.add("missing: chdir", chdirStr(fs, fs.p("nodir")));
 
 	// The Q2REPRO failure: a user folder without the file searched before the folder that has it
@@ -535,6 +559,9 @@ void fileTests(const Fs &fs, Results &r, const std::string &dir)
 	r.add(l + "read other case", writeFile(fs, P("case.txt"), "w", "case") + " " + readAll(fs, P("CASE.TXT")));
 	r.add(l + "reader during rewrite", readerSeesRewrite(fs, P("c.txt")));
 	r.add(l + "inodes", inodeStr(fs, P("wp.txt"), P("c.txt")));
+	r.add(l + "create path from / then write", createPathWrite(fs, P("cp/sub/cp.txt"), "cp") + " " + readAll(fs, P("cp/sub/cp.txt")));
+	r.add(l + "create path again", createPathWrite(fs, P("cp/sub/cp.txt"), "cp2") + " " + readAll(fs, P("cp/sub/cp.txt")));
+	r.add(l + "read other file afterwards", readAll(fs, P("wp.txt")));
 	r.add(l + "remove", removeStr(fs, P("a.txt")));
 	r.add(l + "read after remove", readAll(fs, P("a.txt")));
 	r.add(l + "stat after remove", statStr(fs, P("a.txt")));
@@ -559,6 +586,8 @@ void fdTests(const Fs &fs, Results &r)
 	r.add("fd: read after O_RDWR", openRead(fs, fs.p("rw.txt")));
 	r.add("fd: O_CREAT|O_EXCL on existing", openWrite(fs, fs.p("ex.txt"), O_WRONLY | O_CREAT | O_TRUNC, "abc") + " " + openWrite(fs, fs.p("ex.txt"), O_WRONLY | O_CREAT | O_EXCL, "E"));
 	r.add("fd: read after O_EXCL", openRead(fs, fs.p("ex.txt")));
+	r.add("fd: O_CREAT|O_EXCL new file", openWrite(fs, fs.p("ex2.txt"), O_WRONLY | O_CREAT | O_EXCL, "N"));
+	r.add("fd: read after O_EXCL create", openRead(fs, fs.p("ex2.txt")));
 	r.add("fd: create without O_TRUNC", openWrite(fs, fs.p("n.txt"), O_WRONLY | O_CREAT, "n"));
 	r.add("fd: read new", openRead(fs, fs.p("n.txt")));
 	r.add("fd: __open_2 read", openRead(fs, fs.p("n.txt"), true));
@@ -571,6 +600,9 @@ void dirTests(const Fs &fs, Results &r)
 	r.add("dir: mkdir existing", mkdirStr(fs, fs.p("d")));
 	r.add("dir: mkdir, missing parent", mkdirStr(fs, fs.p("nodir2/sub")));
 	r.add("dir: stat parent of failed mkdir", statStr(fs, fs.p("nodir2")));
+	r.add("dir: mkdir on a file", mkdirStr(fs, fs.p("o.txt")));
+	r.add("dir: opendir on a file", listDir(fs, fs.p("o.txt")));
+	r.add("dir: scandir on a file", scanDir(fs, fs.p("o.txt")));
 	r.add("dir: stat", statStr(fs, fs.p("d")));
 	r.add("dir: access", accessStr(fs, fs.p("d"), F_OK));
 	r.add("dir: fill", writeFile(fs, fs.p("d/1.txt"), "w", "1") + " " + writeFile(fs, fs.p("d/2.txt"), "w", "22") + " " +

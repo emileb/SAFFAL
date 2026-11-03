@@ -184,6 +184,10 @@ extern "C"
 		if(parent.length() <= 2)   // too short to be a real path, let the caller proceed
 			return true;
 
+		// Above the tree root: Java reports it missing, and caching that would hide the whole tree
+		if(!isInSAF(parent))
+			return true;
+
 		bool decided = false;
 		bool result = false;
 
@@ -240,6 +244,14 @@ extern "C"
 		return safDirectoryExists(parentOfPath(fullFilename));
 	}
 
+// statInfo always answers for folders (only some files need an open)
+	static bool safIsDirectory(const std::string &path)
+	{
+		bool isDir;
+		long long size, modified;
+		return FileJNI_statInfo(path.c_str(), &isDir, &size, &modified) && isDir;
+	}
+
 //------------------------
 // open INTERCEPT
 // The only reason this is here is because one engine I use uses 'open' to test the presence of a file
@@ -262,6 +274,17 @@ extern "C"
 #define O_WRONLY        01
 #define O_RDWR          02
 #define O_APPEND        02000
+#ifndef O_CREAT
+#define O_CREAT         0100
+#define O_EXCL          0200
+#endif
+
+			// Java's "w" would truncate the existing file
+			if((oflag & O_CREAT) && (oflag & O_EXCL) && FileJNI_exists(fullFilename.c_str()))
+			{
+				errno = EEXIST;
+				return -1;
+			}
 
 			// Dark places uses raw open to write to files, check here
 			if(oflag & (O_WRONLY | O_RDWR))
@@ -428,15 +451,22 @@ extern "C"
 //------------------------
 	int mkdir(const char *path, mode_t mode)
 	{
+		// Remove relative paths (../ etc)
+		std::string fullPath = getFullPath(path);
+
+		// Java's mkdirs() reports success for a folder that is already there
+		if(isInSAF(fullPath) && FileJNI_exists(fullPath.c_str()))
+		{
+			errno = EEXIST;
+			return -1;
+		}
+
 		// Clear the invalid path cache so we can read files in newly created folder
 		if(cacheInvalidPaths)
 		{
 			invalidPaths.clear();
 			clearSAFPathExistsCache();
 		}
-
-		// Remove relative paths (../ etc)
-		std::string fullPath = getFullPath(path);
 
 		LOGI("mkdir %s, %d. fullPath %s", path, mode, fullPath.c_str());
 
@@ -449,6 +479,7 @@ extern "C"
 		}
 		else if(status == 1)
 		{
+			errno = EIO;
 			return -1; // Failed
 		}
 		else   // Not in SAF, use real function
@@ -482,11 +513,21 @@ extern "C"
 				return -1;  // parent directory does not exist, so neither can the file
 			}
 
+			// The canonical path loses the trailing slash, which only a folder may have
+			const size_t pathLen = strlen(path);
+			const bool wantDir = pathLen > 1 && path[pathLen - 1] == '/';
+
 			// Answer from the SAF listing, an open costs ~20 ms per file and ~80 ms per folder
 			bool isDir;
 			long long size, modified;
 			if(FileJNI_statInfo(fullFilename.c_str(), &isDir, &size, &modified))
 			{
+				if(wantDir && !isDir)
+				{
+					errno = ENOTDIR;
+					return -1;
+				}
+
 				memset(statbuf, 0, sizeof(struct stat));
 				// Engines compare dev/ino to tell files apart (Quakespasm COM_SameDirectory, fts cycle checks)
 				statbuf->st_dev = 0x5AF;
@@ -509,6 +550,12 @@ extern "C"
 				fstat(fd, statbuf);
 				LOGI("stat size = %ld, mode = %d", statbuf->st_size, statbuf->st_mode);
 				close(fd);
+
+				if(wantDir && !S_ISDIR(statbuf->st_mode))
+				{
+					errno = ENOTDIR;
+					return -1;
+				}
 				return 0;
 			}
 			else
@@ -552,6 +599,13 @@ extern "C"
 
 		if(inSAF)
 		{
+			// Java would delete the folder and everything in it
+			if(safIsDirectory(fullFilename) && !FIleJNI_opendir(fullFilename.c_str()).empty())
+			{
+				errno = ENOTEMPTY;
+				return -1;
+			}
+
             // Remove all user files from cache
             clearUserFilesFromCache(1);
 
@@ -648,7 +702,8 @@ extern "C"
 
 			std::vector <std::string> items = FIleJNI_opendir(fullFilename.c_str());
 
-			if(items.size() > 0)
+			// A missing folder or a file also gives an empty listing
+			if(items.size() > 0 || safIsDirectory(fullFilename))
 			{
 				// Create our own DIR object and fill with the data we need
 				DIR_SAF *dirSaf = new DIR_SAF();
@@ -686,7 +741,7 @@ extern "C"
 			}
 			else
 			{
-				errno = ENOENT;
+				errno = FileJNI_exists(fullFilename.c_str()) ? ENOTDIR : ENOENT;
 				return NULL;
 			}
 		}
@@ -782,6 +837,7 @@ extern "C"
 			if(dirSAF)
 			{
 				int numberFiles = 0;
+				*namelist = NULL;  // what libc gives for an empty folder, so callers can free it
 
 				if(dirSAF->items.size() > 0)
 				{
@@ -818,7 +874,7 @@ extern "C"
 			}
 			else
 			{
-				return 0;
+				return -1;  // errno set by opendir
 			}
 		}
 		else
@@ -853,13 +909,24 @@ extern "C"
 
 		if(inSAFOld && inSAFNew)
 		{
+			// Java deletes the target first, so a missing source would cost the target
+			if(!FileJNI_exists(fullFilenameOld.c_str()))
+			{
+				errno = ENOENT;
+				return -1;
+			}
+
             // Remove all user files from cache
             clearUserFilesFromCache(1);
 
 			// the move changes what exists on both sides
 			clearSAFPathExistsCache();
 
-			return FileJNI_rename(resolvedOld ? fullFilenameOld.c_str() : old_filename, resolvedNew ? fullFilenameNew.c_str() : new_filename);
+			if(FileJNI_rename(resolvedOld ? fullFilenameOld.c_str() : old_filename, resolvedNew ? fullFilenameNew.c_str() : new_filename) == 0)
+				return 0;
+
+			errno = EIO;
+			return -1;
 		}
 		else
 		{
