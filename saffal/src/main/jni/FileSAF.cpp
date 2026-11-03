@@ -274,6 +274,7 @@ extern "C"
 			}
 			else if(cacheInvalidPaths && !checkSAFPathExistsCache(fullFilename))
 			{
+				errno = ENOENT;
 				return -1;  // parent directory does not exist, so neither can the file
 			}
 
@@ -282,8 +283,9 @@ extern "C"
 
 			if(fd > 0)
 				return fd;
-			else
-				return -1;
+
+			errno = ENOENT;
+			return -1;
 		}
 		else   // Not in SAF, normal access
 		{
@@ -351,6 +353,8 @@ extern "C"
 			}
 			else if(cacheInvalidPaths && !checkSAFPathExistsCache(fullFilename))
 			{
+				// Q2PRO only keeps searching its paths after ENOENT
+				errno = ENOENT;
 				return NULL;  // parent directory does not exist, so neither can the file
 			}
 
@@ -364,6 +368,10 @@ extern "C"
 
 				if(file == NULL)
 					LOGI("ERROR fdopen returned NULL");
+			}
+			else
+			{
+				errno = ENOENT;
 			}
 		}
 		else   // Not in SAF, normal access
@@ -469,7 +477,10 @@ extern "C"
 		if(inSAF)
 		{
 			if(cacheInvalidPaths && !checkSAFPathExistsCache(fullFilename))
+			{
+				errno = ENOENT;
 				return -1;  // parent directory does not exist, so neither can the file
+			}
 
 			// Answer from the SAF listing, an open costs ~20 ms per file and ~80 ms per folder
 			bool isDir;
@@ -502,6 +513,7 @@ extern "C"
 			}
 			else
 			{
+				errno = ENOENT;
 				return -1;
 			}
 		}
@@ -515,7 +527,10 @@ extern "C"
 			if(cacheInvalidPaths)
 			{
 				if(checkPathExistsCache(path) == false)
+				{
+					errno = ENOENT;
 					return -1; // Parent does not exist, so file must not exist
+				}
 			}
 
 			return stat_real(path, statbuf);
@@ -543,7 +558,12 @@ extern "C"
 			// a deleted directory must not stay cached as present
 			clearSAFPathExistsCache();
 
-			return FileJNI_delete(resolved ? fullFilename.c_str() : path);
+			// Java returns 1 on failure, C callers expect -1 and errno
+			if(FileJNI_delete(resolved ? fullFilename.c_str() : path) == 0)
+				return 0;
+
+			errno = ENOENT;
+			return -1;
 		}
 		else
 		{
@@ -571,13 +591,17 @@ extern "C"
 		if(inSAF)
 		{
 			if(cacheInvalidPaths && !checkSAFPathExistsCache(fullFilename))
+			{
+				errno = ENOENT;
 				return -1;  // parent directory does not exist, so neither can the file
+			}
 
 			// TODO! Check mode for access bits
 			if(FileJNI_exists(fullFilename.c_str()))
 				return 0;
-			else
-				return -1;
+
+			errno = ENOENT;
+			return -1;
 		}
 		else
 		{
@@ -617,7 +641,10 @@ extern "C"
 			// this check every recovery attempt below a missing directory is a
 			// fresh JNI listing.
 			if(cacheInvalidPaths && !safDirectoryExists(fullFilename))
+			{
+				errno = ENOENT;
 				return NULL;
+			}
 
 			std::vector <std::string> items = FIleJNI_opendir(fullFilename.c_str());
 
@@ -659,6 +686,7 @@ extern "C"
 			}
 			else
 			{
+				errno = ENOENT;
 				return NULL;
 			}
 		}
