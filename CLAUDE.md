@@ -9,29 +9,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Modules
 
 - **`saffal/`** — The core library (Android Library module, published artifact)
-- **`app/`** — Example application demonstrating library usage
+- **`saftest/`** — Regression test app (see below)
+- **`app/`** — Old support-library example; not in `settings.gradle` any more (doesn't build with AGP 8)
 
 ## Build Commands
+
+The OpenTouch apps include only `saffal/`; the root Gradle files here are for the standalone build (AGP 8.13, Gradle 8.14, JDK ≤ 21).
 
 ```bash
 # Build debug AAR (library)
 ./gradlew :saffal:assembleDebug
 
-# Build full project
-./gradlew assembleDebug
-
-# Run unit tests
-./gradlew test
-
-# Run instrumentation tests (requires connected device/emulator)
-./gradlew connectedAndroidTest
-
-# Lint
-./gradlew lint
-
-# Clean
-./gradlew clean
+# Build the regression test app (also builds libsaffal.so from saffal/src/main/jni)
+./gradlew :saftest:assembleDebug
 ```
+
+## Regression test (`saftest/`)
+
+`saftest/src/main/jni/saftest.cpp` runs the same file operations three times: through real libc on a normal folder (the expected results), through SAFFAL's exports on a SAF folder, and through SAFFAL's exports on a normal folder (pass-through). Every result that differs from libc's is reported: return value, `errno` (preset to 0), data read, file type and size, folder listings, `getcwd`. It covers missing paths, `fopen` modes, two readers of one file, raw `open` flags and `__open_2`, `mkdir`/`remove`/`rename`, `opendir`/`scandir`, relative paths after `chdir` (including misses, relative `chdir`, `getcwd` buffers and another thread), a launch-like `chdir` into a game folder with `./` paths, a Q2PRO-style search loop that stops on anything but ENOENT, more files than the fd cache holds, and threaded reads. Built against SAFFAL from before `944fe38`, the search checks report "stopped by errno=0": the Q2REPRO colormap.pcx failure. The suite repeats under the SAFFAL settings of the launcher (no native caches), the game process (native caches) and the game with prefetch.
+
+Run it after any change to the native or Java SAF code:
+
+1. Install `saftest/build/outputs/apk/debug/saftest-debug.apk`, create a folder (`adb shell mkdir /sdcard/SAFTest`) and pick it once with "Pick SAF folder" (on Android 10 the picker hides internal storage until "Show internal storage" in its menu).
+2. `adb shell am start -n com.opentouchgaming.saftest/.MainActivity --ez autorun true`, wait for `SAFTEST FINISHED` in `adb logcat -s SAFTEST`.
+3. The report is in `/sdcard/Android/data/com.opentouchgaming.saftest/files/saftest_report.txt`: one `SAFTEST mode=...` summary per mode and a `FAIL` line per difference. Pass-through should always show 0. Compare SAF failures against the previous run; known differences are listed in the latest report.
 
 ## Architecture
 
@@ -48,7 +49,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **`FileJNI.cpp`** — JNI initialization and method dispatch.
 - **`FileCache.cpp`** — Caches file descriptors (max 256). Thread-safe via pthreads.
 - **`Utils.cpp`** — C++ utility functions.
-- Build uses legacy **ndk-build** (not CMake). Config in `Android.mk` / `Application.mk`. NDK version: 24. C++ STL: `c++_static`. Platform: Android 16 min.
+- Build uses legacy **ndk-build** (not CMake). Config in `Android.mk` / `Application.mk`. NDK 27, C++ STL `c++_static`, minSdk 21.
 
 ### Key Design Decisions
 
