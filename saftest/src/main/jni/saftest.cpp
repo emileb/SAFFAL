@@ -40,6 +40,8 @@ struct Fs
 	int (*open2_)(const char *, int);
 	int (*close_)(int);
 	int (*stat_)(const char *, struct stat *);
+	int (*lstat_)(const char *, struct stat *);
+	char *(*realpath_)(const char *, char *);
 	int (*access_)(const char *, int);
 	int (*mkdir_)(const char *, mode_t);
 	int (*remove_)(const char *);
@@ -75,6 +77,8 @@ bool bindAll(Fs &fs, void *lib)
 	ok &= bindFn(fs.open2_, lib, "__open_2");
 	ok &= bindFn(fs.close_, lib, "close");
 	ok &= bindFn(fs.stat_, lib, "stat");
+	ok &= bindFn(fs.lstat_, lib, "lstat");
+	ok &= bindFn(fs.realpath_, lib, "realpath");
 	ok &= bindFn(fs.access_, lib, "access");
 	ok &= bindFn(fs.mkdir_, lib, "mkdir");
 	ok &= bindFn(fs.remove_, lib, "remove");
@@ -198,6 +202,37 @@ std::string statStr(const Fs &fs, const std::string &path)
 	if (S_ISREG(st.st_mode))
 		return "file size=" + std::to_string((long long) st.st_size);
 	return "other type=" + std::to_string(st.st_mode & S_IFMT);
+}
+
+std::string lstatStr(const Fs &fs, const std::string &path)
+{
+	struct stat st;
+	errno = 0;
+	if (fs.lstat_(path.c_str(), &st) != 0)
+		return failed(errno);
+	if (S_ISDIR(st.st_mode))
+		return "dir";
+	if (S_ISREG(st.st_mode))
+		return "file size=" + std::to_string((long long) st.st_size);
+	return "other type=" + std::to_string(st.st_mode & S_IFMT);
+}
+
+// Shown relative to the resolved test folder: libc resolves /sdcard to /storage/emulated/0
+std::string realpathStr(const Fs &fs, const std::string &path)
+{
+	char *root = fs.realpath_(fs.root.c_str(), nullptr);
+	if (!root)
+		return "root " + failed(errno);
+	std::string rootStr = root;
+	free(root);
+	char buf[PATH_MAX];
+	errno = 0;
+	if (!fs.realpath_(path.c_str(), buf))
+		return failed(errno);
+	std::string out = buf;
+	if (out.compare(0, rootStr.size(), rootStr) == 0)
+		return "<root>" + out.substr(rootStr.size());
+	return "outside root: " + out;
 }
 
 // Distinct files must have distinct inodes, the same file the same one (engines compare dev/ino)
@@ -648,6 +683,19 @@ void pathTests(const Fs &fs, Results &r)
 	r.add("path: trailing slash on folder", statStr(fs, fs.p("d/")));
 	r.add("path: trailing slash on file", statStr(fs, fs.p("o.txt/")));
 	r.add("path: root folder", statStr(fs, fs.p("")));
+	r.add("path: lstat file", lstatStr(fs, fs.p("o.txt")));
+	r.add("path: lstat folder", lstatStr(fs, fs.p("d")));
+	r.add("path: lstat missing", lstatStr(fs, fs.p("missing.txt")));
+	r.add("path: lstat missing parent", lstatStr(fs, fs.p("nodir/missing.txt")));
+	r.add("path: realpath file", realpathStr(fs, fs.p("o.txt")));
+	r.add("path: realpath folder", realpathStr(fs, fs.p("d")));
+	r.add("path: realpath dot-dot", realpathStr(fs, fs.p("d/../o.txt")));
+	r.add("path: realpath double slash", realpathStr(fs, fs.p("d//t/3.txt")));
+	r.add("path: realpath trailing slash on folder", realpathStr(fs, fs.p("d/")));
+	r.add("path: realpath trailing slash on file", realpathStr(fs, fs.p("o.txt/")));
+	r.add("path: realpath missing", realpathStr(fs, fs.p("missing.txt")));
+	r.add("path: realpath missing parent", realpathStr(fs, fs.p("nodir/missing.txt")));
+	r.add("path: realpath root folder", realpathStr(fs, fs.p("")));
 }
 
 // Relative paths after chdir into the test folder; restores the real working directory
@@ -657,6 +705,10 @@ void cwdTests(const Fs &fs, Results &r, const std::string &savedCwd)
 	r.add("cwd: getcwd", cwdStr(fs));
 	r.add("cwd: read relative", readAll(fs, "t/3.txt"));
 	r.add("cwd: stat dot-dot", statStr(fs, "../o.txt"));
+	r.add("cwd: lstat relative", lstatStr(fs, "t/3.txt"));
+	r.add("cwd: realpath relative", realpathStr(fs, "t/3.txt"));
+	r.add("cwd: realpath dot-dot", realpathStr(fs, "../o.txt"));
+	r.add("cwd: realpath missing relative", realpathStr(fs, "nope.txt"));
 	r.add("cwd: write relative", writeFile(fs, "rel.txt", "w", "R"));
 	r.add("cwd: read it by full path", readAll(fs, fs.p("d/rel.txt")));
 	r.add("cwd: open relative", openRead(fs, "rel.txt"));

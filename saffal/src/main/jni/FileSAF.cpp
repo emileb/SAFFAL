@@ -586,6 +586,91 @@ extern "C"
 	}
 
 //------------------------
+// lstat INTERCEPT
+//------------------------
+	int lstat(const char *path, struct stat *statbuf)
+	{
+		LOGI("lstat %s", path);
+
+		std::string fullFilename = getFullPath(path);
+
+		// SAF has no symlinks, so lstat is stat (std::filesystem::symlink_status uses lstat)
+		if(isInSAF(fullFilename))
+			return stat(path, statbuf);
+
+		static int (*lstat_real)(const char *path, struct stat * statbuf) = NULL;
+
+		if(lstat_real == NULL)
+			lstat_real = (int (*)(const char *path, struct stat * statbuf)) loadRealFunc("lstat");
+
+		return lstat_real(path, statbuf);
+	}
+
+//------------------------
+// realpath INTERCEPT
+//------------------------
+	char *realpath(const char *path, char *resolved_path)
+	{
+		LOGI("realpath %s", path);
+
+		if(path == NULL)
+		{
+			errno = EINVAL;
+			return NULL;
+		}
+
+		std::string fullFilename = getFullPath(path);
+
+		if(isInSAF(fullFilename))
+		{
+			// No symlinks in SAF: the canonical path is the real path, once '//' and a trailing '/' go
+			std::string clean;
+			for(char c : fullFilename)
+			{
+				if(c == '/' && !clean.empty() && clean.back() == '/')
+					continue;
+				clean += c;
+			}
+			bool trailingSlash = clean.length() > 1 && clean.back() == '/';
+			if(trailingSlash)
+				clean.pop_back();
+
+			struct stat st;
+			if(stat(clean.c_str(), &st) != 0)
+				return NULL;  // stat() set errno
+
+			if(trailingSlash && !S_ISDIR(st.st_mode))
+			{
+				errno = ENOTDIR;
+				return NULL;
+			}
+
+			if(clean.length() >= PATH_MAX)
+			{
+				errno = ENAMETOOLONG;
+				return NULL;
+			}
+
+			char *out = resolved_path ? resolved_path : (char *) malloc(PATH_MAX);
+			if(out == NULL)
+			{
+				errno = ENOMEM;
+				return NULL;
+			}
+
+			strcpy(out, clean.c_str());
+			return out;
+		}
+
+		static char *(*realpath_real)(const char *path, char *resolved_path) = NULL;
+
+		if(realpath_real == NULL)
+			realpath_real = (char *(*)(const char *path, char *resolved_path)) loadRealFunc("realpath");
+
+		return realpath_real(path, resolved_path);
+	}
+
+//------------------------
 // remove INTERCEPT
 //------------------------
 	int remove(const char *path)
